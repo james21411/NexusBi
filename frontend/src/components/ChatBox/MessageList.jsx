@@ -1,4 +1,5 @@
 import React from 'react';
+import { FiUser, FiBot } from 'react-icons/fi';
 
 const MessageList = ({ messages, messagesEndRef }) => {
   return (
@@ -22,7 +23,7 @@ const MessageList = ({ messages, messagesEndRef }) => {
             className={`message ${message.sender} ${message.isError ? 'error' : ''}`}
           >
             <div className="message-avatar">
-              {message.sender === 'user' ? '👤' : '🤖'}
+              {message.sender === 'user' ? <FiUser /> : <FiBot />}
             </div>
             <div className="message-content">
               <div className="message-text">{message.text}</div>

@@ -183,6 +183,7 @@ body {
 
         .loading-spinner {
           animation: spin 1s linear infinite;
+          font-size: 1rem;
         }
       }
     }
@@ -295,8 +296,10 @@ body {
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1rem;
+      font-size: 1.25rem;
       flex-shrink: 0;
+      background-color: rgba(255, 255, 255, 0.2);
+      color: inherit;
     }
 
     .message-content {

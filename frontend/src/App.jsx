@@ -6,14 +6,9 @@ import './styles/main.scss';
 
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
-  const [sessionId, setSessionId] = useState(null);
 
   const handleViewChange = (view) => {
     setCurrentView(view);
-  };
-
-  const handleSessionStart = (newSessionId) => {
-    setSessionId(newSessionId);
   };
 
   return (

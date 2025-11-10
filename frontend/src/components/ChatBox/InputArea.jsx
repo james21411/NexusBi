@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { FiSend, FiLoader } from 'react-icons/fi';
 
 const InputArea = ({ onSendMessage, isLoading, disabled }) => {
   const [message, setMessage] = useState('');
@@ -52,9 +53,9 @@ const InputArea = ({ onSendMessage, isLoading, disabled }) => {
             className="send-button"
           >
             {isLoading ? (
-              <span className="loading-spinner">⏳</span>
+              <FiLoader className="loading-spinner" />
             ) : (
-              <span>📤</span>
+              <FiSend />
             )}
           </button>
         </div>

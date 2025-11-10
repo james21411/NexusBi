@@ -96,6 +96,8 @@ const MainContent = () => {
         onToggle={toggleChatbot}
         onCollapse={handleChatbotCollapse}
         onResize={handleChatbotResize}
+        sessionId={null}
+        onSessionStart={() => {}}
       />
     </div>
   );

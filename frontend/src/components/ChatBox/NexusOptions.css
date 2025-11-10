@@ -1,0 +1,24 @@
+.nexus-options-container{
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.nexus-option-button{
+    padding: 0.5rem;
+    border-radius: 25px;
+    background: linear-gradient(45deg,#cef2d9,#d5f2ce);
+    border: 1px solid #e3cef2;
+    margin: 3px;
+    box-shadow: 2px 2px 4px rgba(150, 149, 149, 0.4);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #374151;
+    font-weight: 500;
+}
+
+.nexus-option-button:hover {
+    background: linear-gradient(45deg,#b8e6c1,#c1e6b8);
+    transform: translateY(-1px);
+    box-shadow: 3px 3px 6px rgba(150, 149, 149, 0.6);
+}

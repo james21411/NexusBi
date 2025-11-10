@@ -1,4 +1,5 @@
 import React from 'react';
+import nexusBiIcon from './ChatBox/NexusBi.png';
 
 const LeftNav = ({ collapsed, width, currentPage, onPageChange, onToggle, onResize }) => {
   const handleNavItemClick = (page) => {
@@ -35,8 +36,7 @@ const LeftNav = ({ collapsed, width, currentPage, onPageChange, onToggle, onResi
         <div id="leftResizer" className="left-resizer" onMouseDown={handleMouseDown}></div>
         <div className="nav-header d-flex justify-content-between align-items-center p-3 border-bottom">
           <div className="logo d-flex align-items-center gap-2">
-            <i className="fas fa-chart-line"></i>
-            {!collapsed && <span>ChatBI</span>}
+            <img src={nexusBiIcon} alt="NexusBI" style={{ width: '40px', height: '40px', borderRadius: '6px' }} />
           </div>
           <button id="toggleLeftNavDesktop" className="btn btn-sm btn-outline-light" title="Réduire la navigation" onClick={onToggle}>
             <i className="fas fa-bars"></i>
