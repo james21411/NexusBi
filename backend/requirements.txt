@@ -15,10 +15,16 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
 aiofiles==24.1.0
+email-validator==2.3.0
+dnspython==2.8.0
 
 # Data visualization libraries
 numpy==1.26.4
 matplotlib==3.9.2
-plotly==5.24.1
 seaborn==0.13.2
 kaleido==0.2.1  # For plotly static image export
+
+# Google AI libraries
+google-generativeai==0.7.2
+google-api-python-client==2.144.0
+google-auth==2.34.0

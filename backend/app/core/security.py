@@ -31,3 +31,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
+
+def get_random_string(length: int = 32) -> str:
+    """Generate a random string of specified length."""
+    import random
+    import string
+    characters = string.ascii_letters + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))

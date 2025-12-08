@@ -24,10 +24,7 @@ class Settings(BaseSettings):
         raise ValueError(v)
 
     # Database
-    POSTGRES_SERVER: str = "localhost"
-    POSTGRES_USER: str = "nexusbi"
-    POSTGRES_PASSWORD: str = "password"
-    POSTGRES_DB: str = "nexusbi"
+    SQLITE_DB: str = "nexusbi.db"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
 
     @field_validator("SQLALCHEMY_DATABASE_URI", mode="before")
@@ -35,13 +32,19 @@ class Settings(BaseSettings):
     def assemble_db_connection(cls, v: Optional[str], info: ValidationInfo) -> str:
         if isinstance(v, str):
             return v
-        return f"postgresql://{info.data.get('POSTGRES_USER')}:{info.data.get('POSTGRES_PASSWORD')}@{info.data.get('POSTGRES_SERVER')}/{info.data.get('POSTGRES_DB')}"
+        return f"sqlite:///{info.data.get('SQLITE_DB')}"
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # OpenAI
     OPENAI_API_KEY: str = ""
+
+    # Gemini
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-pro"
+    GEMINI_TEMPERATURE: float = 0.7
+    GEMINI_MAX_TOKENS: int = 1024
 
     # File uploads
     UPLOAD_DIR: str = "/tmp/nexusbi/uploads"

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, User } from 'lucide-react';
+import { AuthPanel } from './AuthPanel';
 
 interface MenuItem {
   label: string;
@@ -132,12 +133,13 @@ export function TopMenuBar({ currentView = 'dashboard', onViewChange, onShowImpo
     <header className="bg-blue-900 flex flex-col" style={{backgroundColor: '#1e3a8a'}}>
       {/* Ligne du haut - Menus principaux */}
       <nav className="text-white h-12 flex items-center px-5 relative z-50" style={{color: 'white', minHeight: '48px'}} ref={menuRef}>
-        {/* Logo et nom */}
+        {/* Logo et nom avec icône utilisateur */}
         <figure className="flex items-center gap-3 mr-6">
           <div className="w-8 h-8 bg-[var(--primary-foreground)] rounded flex items-center justify-center">
             <span className="text-[var(--primary)] font-medium text-lg">N</span>
           </div>
           <span className="text-white text-lg font-medium">NexusBi</span>
+          <User className="text-white" size={20} />
         </figure>
 
         {/* Menus */}
@@ -186,18 +188,9 @@ export function TopMenuBar({ currentView = 'dashboard', onViewChange, onShowImpo
           ))}
         </menu>
 
-        {/* Zone droite - Info utilisateur */}
+        {/* Zone droite - Authentification */}
         <aside className="ml-auto flex items-center gap-4">
-          <div className="text-blue-300 flex items-center gap-3 text-lg">
-            <div className="w-4 h-4 bg-green-400 rounded-full"></div>
-            <span>En ligne</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-[var(--secondary)] rounded-full flex items-center justify-center text-lg font-medium">
-              <span>JD</span>
-            </div>
-            <span className="text-white text-lg">Jean Dupont</span>
-          </div>
+          <AuthPanel />
         </aside>
       </nav>
 

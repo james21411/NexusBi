@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AuthProvider } from './api/authContext';
 import { DashboardView } from './components/DashboardView';
 import { DataCleaningView } from './components/DataCleaningView';
 import { ReportsView } from './components/ReportsView';
@@ -16,7 +17,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <AuthProvider>
+      <div className="min-h-screen bg-gray-50">
       {/* Vues */}
       {currentView === 'dashboard' && (
         <DashboardView 
@@ -64,5 +66,6 @@ export default function App() {
       {/* Modale */}
       {showImportModal && <SqlImportModal onClose={() => setShowImportModal(false)} />}
     </div>
+    </AuthProvider>
   );
 }

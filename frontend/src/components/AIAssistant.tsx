@@ -1,5 +1,6 @@
-import { Send, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { Send, Sparkles, Settings } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useAISettings } from '../hooks/useAISettings';
 
 const initialMessages = [
   {
@@ -22,15 +23,36 @@ const initialMessages = [
 export function AIAssistant() {
   const [messages] = useState(initialMessages);
   const [inputValue, setInputValue] = useState('');
+  const aiSettings = useAISettings();
+
 
   return (
     <div className="w-80 bg-gray-50 border-l border-gray-200 flex flex-col">
       {/* En-tête */}
-      <div className="bg-white px-4 py-3 border-b border-gray-200 flex items-center gap-2">
-        <div className="w-6 h-6 bg-[#FF6B00] rounded flex items-center justify-center">
-          <Sparkles size={14} className="text-white" />
+      <div className="bg-white px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-[#FF6B00] rounded flex items-center justify-center">
+            <Sparkles size={14} className="text-white" />
+          </div>
+          <div>
+            <h2 className="text-gray-800 text-sm">Nexus Assistant</h2>
+            <p className="text-xs text-gray-500">
+              {aiSettings.aiProvider} • {aiSettings.aiModel}
+              {aiSettings.apiKey ? ' ✓' : ' ⚠'}
+            </p>
+          </div>
         </div>
-        <h2 className="text-gray-800 text-sm">Nexus Assistant</h2>
+        <button
+          onClick={() => {
+            // Naviguer vers les paramètres AI
+            window.location.hash = '#settings/ai';
+            window.dispatchEvent(new Event('hashchange'));
+          }}
+          className="p-1 hover:bg-gray-100 rounded"
+          title="Paramètres AI"
+        >
+          <Settings size={16} className="text-gray-600" />
+        </button>
       </div>
 
       {/* Zone de conversation */}

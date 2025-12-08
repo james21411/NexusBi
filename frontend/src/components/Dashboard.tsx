@@ -55,6 +55,7 @@ export function Dashboard() {
   const [selectedChartTitle, setSelectedChartTitle] = useState('');
 
   const openModal = (chartType: string, data: any[], title: string) => {
+    console.log('Opening modal for:', chartType, title);
     setSelectedChart(chartType);
     setSelectedChartData(data);
     setSelectedChartTitle(title);
@@ -66,16 +67,17 @@ export function Dashboard() {
   };
 
   const renderChartModal = () => {
+    console.log('renderChartModal called, modalOpen:', modalOpen, 'selectedChart:', selectedChart);
     if (!modalOpen) return null;
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-        <div className="bg-[#3e3e42] rounded border border-[#454545] p-6 max-w-4xl w-full max-h-[90vh] overflow-auto">
+      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[100] p-4" onClick={closeModal}>
+        <div className="bg-[#3e3e42] rounded border border-[#454545] p-6 max-w-4xl w-full max-h-[90vh] overflow-auto relative" onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-gray-200 text-lg font-medium">{selectedChartTitle}</h3>
             <button
               onClick={closeModal}
-              className="text-gray-400 hover:text-gray-200 text-xl font-bold"
+              className="text-gray-400 hover:text-gray-200 text-xl font-bold hover:bg-[#454545] rounded-full w-8 h-8 flex items-center justify-center"
             >
               ×
             </button>

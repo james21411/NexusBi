@@ -28,64 +28,69 @@ interface SettingsViewProps {
 export function SettingsView({ currentView, onViewChange, onShowImportModal }: SettingsViewProps) {
   const [activeSection, setActiveSection] = useState('general');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [settings, setSettings] = useState({
-    // Général
-    appName: 'NexusBi',
-    language: 'fr',
-    timezone: 'Europe/Paris',
-    dateFormat: 'DD/MM/YYYY',
 
-    // Thème
-    theme: 'light',
-    primaryColor: '#0056D2',
-    accentColor: '#FF6B00',
-    fontSize: 'medium',
-    compactMode: false,
+  // Charger les paramètres depuis localStorage au démarrage
+  const [settings, setSettings] = useState(() => {
+    const savedSettings = localStorage.getItem('aiSettings');
+    return savedSettings ? JSON.parse(savedSettings) : {
+      // Général
+      appName: 'NexusBi',
+      language: 'fr',
+      timezone: 'Europe/Paris',
+      dateFormat: 'DD/MM/YYYY',
 
-    // IA & Modèles
-    aiProvider: 'openai',
-    aiModel: 'gpt-4',
-    apiKey: '',
-    temperature: 0.7,
-    maxTokens: 2000,
-    enableAutoSuggestions: true,
+      // Thème
+      theme: 'light',
+      primaryColor: '#0056D2',
+      accentColor: '#FF6B00',
+      fontSize: 'medium',
+      compactMode: false,
 
-    // Base de données
-    dbType: 'postgresql',
-    dbHost: 'localhost',
-    dbPort: '5432',
-    dbName: 'nexusbi',
-    dbUser: 'admin',
-    dbPassword: '',
-    autoBackup: true,
-    backupFrequency: 'daily',
+      // IA & Modèles
+      aiProvider: 'openai',
+      aiModel: 'gpt-4',
+      apiKey: '',
+      temperature: 0.7,
+      maxTokens: 2000,
+      enableAutoSuggestions: true,
 
-    // Notifications
-    emailNotifications: true,
-    pushNotifications: false,
-    notifyOnReportReady: true,
-    notifyOnDataSync: true,
-    notifyOnErrors: true,
-    notifyWeeklySummary: true,
+      // Base de données
+      dbType: 'postgresql',
+      dbHost: 'localhost',
+      dbPort: '5432',
+      dbName: 'nexusbi',
+      dbUser: 'admin',
+      dbPassword: '',
+      autoBackup: true,
+      backupFrequency: 'daily',
 
-    // Sécurité
-    twoFactorAuth: false,
-    sessionTimeout: '30',
-    passwordExpiry: '90',
-    ipWhitelist: '',
-    allowApiAccess: true,
+      // Notifications
+      emailNotifications: true,
+      pushNotifications: false,
+      notifyOnReportReady: true,
+      notifyOnDataSync: true,
+      notifyOnErrors: true,
+      notifyWeeklySummary: true,
 
-    // Équipe
-    defaultRole: 'viewer',
-    allowInvites: true,
-    maxUsers: '50',
-    requireApproval: true,
+      // Sécurité
+      twoFactorAuth: false,
+      sessionTimeout: '30',
+      passwordExpiry: '90',
+      ipWhitelist: '',
+      allowApiAccess: true,
 
-    // Exportation
-    defaultExportFormat: 'pdf',
-    includeMetadata: true,
-    compressExports: false,
-    watermark: false,
+      // Équipe
+      defaultRole: 'viewer',
+      allowInvites: true,
+      maxUsers: '50',
+      requireApproval: true,
+
+      // Exportation
+      defaultExportFormat: 'pdf',
+      includeMetadata: true,
+      compressExports: false,
+      watermark: false,
+    };
   });
 
   const sections = [
@@ -106,7 +111,10 @@ export function SettingsView({ currentView, onViewChange, onShowImportModal }: S
 
   const handleSave = () => {
     console.log('Paramètres sauvegardés:', settings);
+    // Sauvegarder dans localStorage
+    localStorage.setItem('aiSettings', JSON.stringify(settings));
     // Afficher notification de succès
+    alert('Paramètres sauvegardés avec succès !');
   };
 
   return (
@@ -338,8 +346,181 @@ export function SettingsView({ currentView, onViewChange, onShowImportModal }: S
                 </div>
               )}
 
+              {/* IA & MODÈLES */}
+              {activeSection === 'ai' && (
+                <div>
+                  <div className="mb-8">
+                    <h1 className="text-gray-800 mb-2">IA & Modèles</h1>
+                    <p className="text-gray-600">Configuration des services d'intelligence artificielle</p>
+                  </div>
+
+                  <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-8">
+                    <div>
+                      <h2 className="text-gray-800 mb-4">Fournisseur d'IA</h2>
+                      <div className="grid grid-cols-2 gap-4">
+                        <button
+                          onClick={() => handleChange('aiProvider', 'openai')}
+                          className={`p-4 border-2 rounded-lg transition-all ${
+                            settings.aiProvider === 'openai'
+                              ? 'border-[#0056D2] bg-blue-50'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-black rounded flex items-center justify-center">
+                              <span className="text-white font-bold text-sm">O</span>
+                            </div>
+                            <div className="text-left">
+                              <p className="text-gray-800 font-medium">OpenAI</p>
+                              <p className="text-gray-600 text-sm">GPT-4, DALL·E, Whisper</p>
+                            </div>
+                          </div>
+                        </button>
+
+                        <button
+                          onClick={() => handleChange('aiProvider', 'gemini')}
+                          className={`p-4 border-2 rounded-lg transition-all ${
+                            settings.aiProvider === 'gemini'
+                              ? 'border-[#0056D2] bg-blue-50'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded flex items-center justify-center">
+                              <span className="text-white font-bold text-sm">G</span>
+                            </div>
+                            <div className="text-left">
+                              <p className="text-gray-800 font-medium">Gemini</p>
+                              <p className="text-gray-600 text-sm">Google AI, modèles multimodaux</p>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h2 className="text-gray-800 mb-4">Modèle par défaut</h2>
+                      <select
+                        value={settings.aiModel}
+                        onChange={(e) => handleChange('aiModel', e.target.value)}
+                        className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0056D2]"
+                      >
+                        {settings.aiProvider === 'openai' ? (
+                          <>
+                            <option value="gpt-4">GPT-4 (Plus puissant)</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Rapide)</option>
+                            <option value="gpt-4o">GPT-4o (Optimisé)</option>
+                            <option value="dall-e-3">DALL·E 3 (Images)</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="gemini-pro">Gemini Pro (Polyvalent)</option>
+                            <option value="gemini-ultra">Gemini Ultra (Haute performance)</option>
+                            <option value="gemini-flash">Gemini Flash (Rapide)</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+
+                    <div>
+                      <h2 className="text-gray-800 mb-4">Clé API</h2>
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={settings.apiKey}
+                            onChange={(e) => handleChange('apiKey', e.target.value)}
+                            placeholder="Entrez votre clé API"
+                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0056D2]"
+                          />
+                          <button
+                            onClick={() => setShowApiKey(!showApiKey)}
+                            className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
+                          >
+                            {showApiKey ? <EyeOff size={20} /> : <Eye size={20} />}
+                          </button>
+                        </div>
+                        <p className="text-gray-600 text-sm">
+                          Votre clé API est stockée localement et n'est jamais envoyée à nos serveurs.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-gray-700 mb-2">Température</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value={settings.temperature}
+                            onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
+                            className="flex-1"
+                          />
+                          <span className="text-gray-800">{settings.temperature}</span>
+                        </div>
+                        <p className="text-gray-600 text-sm mt-1">
+                          Contrôle la créativité (0 = précis, 1 = créatif)
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-gray-700 mb-2">Tokens maximum</label>
+                        <select
+                          value={settings.maxTokens}
+                          onChange={(e) => handleChange('maxTokens', parseInt(e.target.value))}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0056D2]"
+                        >
+                          <option value="1000">1000 tokens</option>
+                          <option value="2000">2000 tokens</option>
+                          <option value="4000">4000 tokens</option>
+                          <option value="8000">8000 tokens</option>
+                          <option value="16000">16000 tokens</option>
+                        </select>
+                        <p className="text-gray-600 text-sm mt-1">
+                          Limite la longueur des réponses
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="text-gray-800">Suggestions automatiques</p>
+                        <p className="text-gray-600">Activer les suggestions de texte intelligentes</p>
+                      </div>
+                      <button
+                        onClick={() => handleChange('enableAutoSuggestions', !settings.enableAutoSuggestions)}
+                        className={`w-12 h-6 rounded-full transition-colors ${
+                          settings.enableAutoSuggestions ? 'bg-[#0056D2]' : 'bg-gray-300'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                          settings.enableAutoSuggestions ? 'translate-x-6' : 'translate-x-0.5'
+                        }`}></div>
+                      </button>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <h3 className="text-gray-800 mb-3">Test de connexion</h3>
+                      <p className="text-gray-600 mb-4">
+                        Vérifiez que votre clé API fonctionne correctement.
+                      </p>
+                      <button
+                        onClick={() => console.log('Test de connexion API')}
+                        className="px-6 py-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0045B0] transition-colors"
+                      >
+                        Tester la connexion
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
               {/* Placeholder pour les autres sections */}
-              {activeSection !== 'general' && activeSection !== 'theme' && (
+              {activeSection !== 'general' && activeSection !== 'theme' && activeSection !== 'ai' && (
                 <div>
                   <div className="mb-8">
                     <h1 className="text-gray-800 mb-2">Section {activeSection}</h1>
@@ -351,6 +532,19 @@ export function SettingsView({ currentView, onViewChange, onShowImportModal }: S
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Bouton d'enregistrement - toujours visible */}
+          <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4">
+            <div className="max-w-4xl mx-auto flex justify-end">
+              <button
+                onClick={handleSave}
+                className="px-8 py-3 bg-[#0056D2] text-white rounded-lg hover:bg-[#0045B0] transition-colors flex items-center gap-2"
+              >
+                <Save size={18} />
+                Enregistrer les paramètres
+              </button>
             </div>
           </div>
         </div>

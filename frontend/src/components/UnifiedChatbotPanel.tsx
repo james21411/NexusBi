@@ -1,10 +1,28 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, MessageSquare, Sparkles } from 'lucide-react';
+import { sendAIQuery } from '../api/service';
+import { useAISettings } from '../hooks/useAISettings';
+import { useAuthContext } from '../api/authContext';
+
+interface Message {
+  id: number;
+  type: 'user' | 'ai';
+  text: string;
+  modelUsed?: string;
+  tokensUsed?: number;
+}
 
 interface UnifiedChatbotPanelProps {
   type: 'ai' | 'cleaning';
-  initialMessages?: Array<{id: number; type: 'user' | 'ai'; text: string}>;
+  initialMessages?: Message[];
   onClose?: () => void;
+}
+
+interface AIResponse {
+  response: string;
+  model_used: string;
+  tokens_used: number;
+  suggestions?: string[];
 }
 
 export function UnifiedChatbotPanel({
@@ -12,10 +30,28 @@ export function UnifiedChatbotPanel({
   initialMessages = [],
   onClose
 }: UnifiedChatbotPanelProps) {
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [inputValue, setInputValue] = useState('');
   const [isVisible, setIsVisible] = useState(true);
   const [panelWidth, setPanelWidth] = useState(380); // Default width in pixels
+  const [isLoading, setIsLoading] = useState(false);
+  const aiSettings = useAISettings();
+  const { token: authToken } = useAuthContext();
+
+  // Load initial messages from localStorage if available
+  useEffect(() => {
+    const savedMessages = localStorage.getItem('chatbotMessages');
+    if (savedMessages) {
+      try {
+        const parsedMessages = JSON.parse(savedMessages);
+        if (Array.isArray(parsedMessages)) {
+          setMessages(parsedMessages);
+        }
+      } catch (error) {
+        console.error('Error loading saved messages:', error);
+      }
+    }
+  }, []);
 
   const toggleVisibility = () => {
     setIsVisible(!isVisible);
@@ -24,28 +60,102 @@ export function UnifiedChatbotPanel({
     }
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (inputValue.trim()) {
-      const newUserMessage = {
+      const newUserMessage: Message = {
         id: messages.length + 1,
-        type: 'user' as const,
+        type: 'user',
         text: inputValue
       };
 
       setMessages([...messages, newUserMessage]);
       setInputValue('');
+      setIsLoading(true);
 
-      // Simulate AI response after 1 second
-      setTimeout(() => {
-        const aiResponse = {
+      try {
+        // Send query to backend API with AI settings
+        // Allow communication without user account when API key is configured
+        // if (!authToken) {
+        //   throw new Error('No authentication token available. Please login first.');
+        // }
+
+        // Send query to backend - allow communication without user account
+        try {
+          console.log('DEBUG: Sending AI query with:', {
+            query: inputValue,
+            model: aiSettings.aiModel,
+            authToken: authToken || null,
+            temperature: aiSettings.temperature,
+            maxTokens: aiSettings.maxTokens
+          });
+
+          const response = await sendAIQuery(
+            inputValue,
+            aiSettings.aiModel,
+            authToken || null, // Allow null auth token
+            aiSettings.temperature,
+            aiSettings.maxTokens
+          );
+
+          console.log('DEBUG: AI query response received:', response);
+
+        if (response.data) {
+          // Type assertion for the response data
+          const responseData = response.data as AIResponse;
+          const aiResponse: Message = {
+            id: messages.length + 2,
+            type: 'ai',
+            text: responseData.response || 'Réponse du modèle AI',
+            modelUsed: responseData.model_used || aiSettings.aiModel,
+            tokensUsed: responseData.tokens_used || 0
+          };
+          setMessages(prev => [...prev, aiResponse]);
+
+          // Save messages to localStorage
+          const updatedMessages = [...messages, newUserMessage, aiResponse];
+          localStorage.setItem('chatbotMessages', JSON.stringify(updatedMessages));
+        } else {
+          const errorResponse: Message = {
+            id: messages.length + 2,
+            type: 'ai',
+            text: `Erreur: ${response.error || 'Impossible de contacter le service AI'}`,
+          };
+          setMessages(prev => [...prev, errorResponse]);
+        }
+      } catch (error) {
+        console.error('Error sending AI query:', error);
+        let errorMessage = 'Erreur inconnue';
+
+        if (error instanceof Error) {
+          errorMessage = error.message;
+          // Provide more specific error messages
+          if (error.message.includes('404')) {
+            errorMessage = 'Backend non disponible. Vérifiez que le serveur backend est démarré (http://127.0.0.1:8000)';
+          } else if (error.message.includes('NetworkError')) {
+            errorMessage = 'Impossible de se connecter au backend. Vérifiez la connexion réseau.';
+          } else if (error.message.includes('CORS')) {
+            errorMessage = 'Problème de configuration CORS. Le backend doit autoriser les requêtes depuis cette origine.';
+          }
+        }
+
+        const errorResponse: Message = {
           id: messages.length + 2,
-          type: 'ai' as const,
-          text: type === 'ai'
-            ? "J'analyse votre demande et je vous réponds avec des insights basés sur vos données..."
-            : "Je prépare les options de nettoyage pour vos données. Un instant..."
+          type: 'ai',
+          text: `⚠️ Erreur: ${errorMessage}`,
         };
-        setMessages(prev => [...prev, aiResponse]);
-      }, 1000);
+        setMessages(prev => [...prev, errorResponse]);
+      }
+      } catch (error) {
+        console.error('Error sending AI query:', error);
+        const errorResponse: Message = {
+          id: messages.length + 2,
+          type: 'ai',
+          text: `Erreur: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
+        };
+        setMessages(prev => [...prev, errorResponse]);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -99,9 +209,17 @@ export function UnifiedChatbotPanel({
           <div className="w-8 h-8 bg-[#FF6B00] rounded flex items-center justify-center">
             <Sparkles size={18} className="text-white" />
           </div>
-          <h2 className="text-gray-800 text-base font-medium">
-            {type === 'ai' ? 'Nexus Assistant' : 'Assistant Nettoyage'}
-          </h2>
+          <div>
+            <h2 className="text-gray-800 text-base font-medium">
+              {type === 'ai' ? 'Nexus Assistant' : 'Assistant Nettoyage'}
+            </h2>
+            {type === 'ai' && (
+              <p className="text-xs text-gray-500">
+                {aiSettings.aiProvider} • {aiSettings.aiModel}
+                {isLoading ? ' (traitement...)' : ' • Fonctionne sans compte'}
+              </p>
+            )}
+          </div>
         </div>
         <button
           onClick={toggleVisibility}
@@ -129,7 +247,7 @@ export function UnifiedChatbotPanel({
             </div>
           </div>
         ) : (
-          messages.map((message) => (
+          messages.map((message: Message) => (
             <div
               key={message.id}
               className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -142,6 +260,12 @@ export function UnifiedChatbotPanel({
                 }`}
               >
                 {message.text}
+                {message.type === 'ai' && message.modelUsed && (
+                  <div className="mt-2 text-xs text-gray-500 flex justify-between items-center">
+                    <span>Modèle: {message.modelUsed}</span>
+                    {message.tokensUsed && <span>{message.tokensUsed} tokens</span>}
+                  </div>
+                )}
               </div>
             </div>
           ))

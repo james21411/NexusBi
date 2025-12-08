@@ -28,6 +28,8 @@ export function DashboardView({ currentView, onViewChange, onShowImportModal }: 
         {/* Zone centrale - Dashboard */}
         <Dashboard />
 
+        {/* Zone réservée pour les composants futurs */}
+
         {/* Panneau latéral droit - Assistant IA */}
         {showAIAssistant && <UnifiedChatbotPanel type="ai" />}
       </div>
