@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey, Text, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -37,3 +37,16 @@ class DataSource(Base):
 
     # Relationships
     project = relationship("Project", back_populates="data_sources")
+    data_rows = relationship("DataFrameData", back_populates="data_source")
+
+
+class DataFrameData(Base):
+    __tablename__ = "dataframe_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    data_source_id = Column(Integer, ForeignKey("data_sources.id"), nullable=False)
+    row_data = Column(Text, nullable=False)  # JSON string of the row data
+    row_index = Column(Integer, nullable=False)  # Row index in the DataFrame
+
+    # Relationships
+    data_source = relationship("DataSource", back_populates="data_rows")

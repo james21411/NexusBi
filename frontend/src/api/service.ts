@@ -1,194 +1,321 @@
-import { apiEndpoints, API_BASE_URL } from './config';
+import axios from 'axios';
+import { API_BASE_URL } from './config';
 
-interface ApiResponse<T> {
-  data?: T;
-  error?: string;
-  status?: number;
+interface AIQueryResponse {
+  response: string;
+  model_used: string;
+  tokens_used: number;
+  suggestions?: string[];
 }
 
-export async function fetchFromAPI<T>(
-  endpoint: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-  data: any = null,
-  authToken: string | null = null
-): Promise<ApiResponse<T>> {
+interface DataAnalysisResponse {
+  analysis_results: any;
+  cleaning_code: string;
+  visualization_suggestions: any[];
+  visualization_code?: string;
+  extended_visualization_suggestions?: any[];
+  recommendations: string[];
+  comprehensive_cleaning_code?: string;
+}
+
+export interface DataSource {
+  id: number;
+  name: string;
+  type: string;
+  project_id: number;
+  connection_string?: string;
+  file_path?: string;
+  schema_info?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DataSourceCreate {
+  name: string;
+  type: string;
+  project_id: number;
+  connection_string?: string;
+  file_path?: string;
+}
+
+export interface DataSourceUpdate {
+  name?: string;
+  type?: string;
+  connection_string?: string;
+  file_path?: string;
+  is_active?: boolean;
+}
+
+export async function sendAIQuery(
+  query: string,
+  model: string,
+  authToken: string | null,
+  temperature: number,
+  maxTokens: number
+): Promise<{ data?: AIQueryResponse; error?: string }> {
   try {
-    // Get the full URL from the endpoint configuration
-    // Use type assertion to handle the complex endpoint structure
-    const endpointKey = endpoint as keyof typeof apiEndpoints;
-    const endpointConfig = apiEndpoints[endpointKey];
-
-    console.log('DEBUG: fetchFromAPI called with endpoint:', endpoint);
-    console.log('DEBUG: endpointConfig:', endpointConfig);
-    console.log('DEBUG: All available endpoints:', apiEndpoints);
-
-    // Handle nested endpoint paths
-    let url: string;
-
-    // Try to navigate the endpoint structure
-    if (endpoint.includes('.')) {
-      const parts = endpoint.split('.');
-      let current: any = apiEndpoints;
-
-      // Navigate through each part of the endpoint path
-      for (const part of parts) {
-        if (current && current[part]) {
-          current = current[part];
-        } else {
-          // If any part is not found, break and use fallback
-          current = null;
-          break;
-        }
-      }
-
-      // If we successfully navigated to a string URL, use it
-      if (typeof current === 'string') {
-        url = current;
-      } else {
-        // Use fallback URL construction
-        console.warn('DEBUG: Endpoint not found in config, using fallback');
-        url = `${API_BASE_URL}/${endpoint.replace('.', '/')}`;
-      }
-    } else {
-      // For simple endpoints without dots
-      url = typeof endpointConfig === 'string' ? endpointConfig : `${API_BASE_URL}/${endpoint}`;
-    }
-
-    console.log('DEBUG: Final URL to be called:', url);
-
-    const options: RequestInit = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await axios.post(
+      `${API_BASE_URL}/ai/query`,
+      {
+        query,
+        model,
+        temperature,
+        max_tokens: maxTokens,
       },
-    };
-
-    // Add authorization header if token is provided
-    if (authToken) {
-      options.headers = {
-        ...options.headers,
-        'Authorization': `Bearer ${authToken}`,
-      };
-    }
-
-    if (data && (method === 'POST' || method === 'PUT')) {
-      options.body = JSON.stringify(data);
-    }
-
-    console.log('DEBUG: Fetching URL:', url);
-    console.log('DEBUG: Fetch options:', options);
-
-    const response = await fetch(url, options);
-
-    console.log('DEBUG: Response status:', response.status);
-    console.log('DEBUG: Response headers:', [...response.headers.entries()]);
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('DEBUG: API Error response:', errorData);
-      return {
-        error: errorData.detail || `HTTP error! status: ${response.status}`,
-        status: response.status,
-      };
-    }
-
-    const responseData = await response.json();
-    return { data: responseData, status: response.status };
-
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    );
+    return { data: response.data };
   } catch (error) {
-    console.error('API Error:', error);
-    return {
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-      status: 500,
-    };
+    console.error('Error sending AI query:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
   }
 }
 
-// Auth API functions
-export async function registerUser(email: string, password: string, fullName: string) {
-  return fetchFromAPI('auth.register', 'POST', {
-    email,
-    password,
-    full_name: fullName,
-  });
+export async function analyzeData(
+  projectId: number,
+  dataSourceId: number,
+  analysisType: string = 'quality',
+  treatmentStrategy: string = 'mean',
+  authToken: string | null
+): Promise<{ data?: DataAnalysisResponse; error?: string }> {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/ai/analyze-data`,
+      {
+        project_id: projectId,
+        data_source_id: dataSourceId,
+        analysis_type: analysisType,
+        treatment_strategy: treatmentStrategy,
+      },
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    );
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error analyzing data:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
 }
 
+export async function generateCleaningCode(
+  projectId: number,
+  dataSourceId: number,
+  treatmentStrategy: string = 'mean',
+  authToken: string | null
+): Promise<{ data?: { cleaning_code: string; comprehensive_cleaning_code?: string; language: string; libraries: string[] }; error?: string }> {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/ai/generate-code`,
+      {
+        project_id: projectId,
+        data_source_id: dataSourceId,
+        treatment_strategy: treatmentStrategy,
+      },
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    );
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error generating cleaning code:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
+}
+
+export async function getVisualizationSuggestions(
+  projectId: number,
+  dataSourceId: number,
+  authToken: string | null
+): Promise<{ data?: { visualization_suggestions: any[]; visualization_code?: string }; error?: string }> {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/ai/analyze-data`,
+      {
+        project_id: projectId,
+        data_source_id: dataSourceId,
+        analysis_type: 'visualization',
+      },
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    );
+    return {
+      data: {
+        visualization_suggestions: response.data.visualization_suggestions,
+        visualization_code: response.data.visualization_code
+      }
+    };
+  } catch (error) {
+    console.error('Error getting visualization suggestions:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
+}
+
+// Data Sources API functions
+export async function getDataSources(
+  authToken: string | null = null
+): Promise<{ data?: DataSource[]; error?: string }> {
+  try {
+    console.log('Fetching data sources from:', `${API_BASE_URL}/data-sources/`);
+    
+    const response = await axios.get(
+      `${API_BASE_URL}/data-sources/`,
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        timeout: 30000
+      }
+    );
+    
+    console.log('Data sources response:', response.data);
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error fetching data sources:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
+}
+
+export async function createDataSource(
+  dataSource: DataSourceCreate,
+  authToken: string | null = null
+): Promise<{ data?: DataSource; error?: string }> {
+  try {
+    console.log('Creating data source:', dataSource);
+    
+    const response = await axios.post(
+      `${API_BASE_URL}/data-sources/`,
+      dataSource,
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        timeout: 10000
+      }
+    );
+    
+    console.log('Data source created:', response.data);
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error creating data source:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
+}
+
+export async function updateDataSource(
+  dataSourceId: number,
+  updates: DataSourceUpdate,
+  authToken: string | null
+): Promise<{ data?: DataSource; error?: string }> {
+  try {
+    const response = await axios.put(
+      `${API_BASE_URL}/data-sources/${dataSourceId}`,
+      updates,
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    );
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error updating data source:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
+}
+
+export async function deleteDataSource(
+  dataSourceId: number,
+  authToken: string | null
+): Promise<{ data?: any; error?: string }> {
+  try {
+    const response = await axios.delete(
+      `${API_BASE_URL}/data-sources/${dataSourceId}`,
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    );
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error deleting data source:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
+}
+
+export async function syncDataSource(
+  dataSourceId: number,
+  authToken: string | null
+): Promise<{ data?: any; error?: string }> {
+  try {
+    const response = await axios.post(
+      `${API_BASE_URL}/data-sources/${dataSourceId}/sync`,
+      {},
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    );
+    return { data: response.data };
+  } catch (error) {
+    console.error('Error syncing data source:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Unknown error occurred' };
+  }
+}
+
+// Add the missing auth functions that were imported
 export async function loginUser(email: string, password: string) {
-  return fetchFromAPI('auth.login', 'POST', {
-    username: email,
-    password,
-  });
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+      email,
+      password,
+    });
+    return { data: response.data };
+  } catch (error) {
+    console.error('Login error:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Login failed' };
+  }
 }
 
-// User API functions
-export async function createAPIKey(keyName: string, keyType: string, apiKeyValue: string, authToken: string) {
-  return fetchFromAPI('user.apiKeys.create', 'POST', {
-    key_name: keyName,
-    key_type: keyType,
-    api_key_value: apiKeyValue,
-  }, authToken);
-}
-
-export async function listAPIKeys(authToken: string) {
-  return fetchFromAPI('user.apiKeys.list', 'GET', null, authToken);
-}
-
-// Chatbot API functions
-export async function configureChatbot(
-  selectedModel: string,
-  temperature: number,
-  maxTokens: number,
-  language: string,
-  authToken: string
-) {
-  return fetchFromAPI('user.chatbot.config', 'POST', {
-    selected_model: selectedModel,
-    temperature,
-    max_tokens: maxTokens,
-    language,
-  }, authToken);
-}
-
-export async function sendChatbotQuery(query: string, authToken: string) {
-  return fetchFromAPI('user.chatbot.query', 'POST', { query }, authToken);
-}
-
-export async function getChatbotModels(authToken: string) {
-  return fetchFromAPI('user.chatbot.models', 'GET', null, authToken);
-}
-
-// Settings API functions
-export async function getSystemSettings(authToken: string) {
-  return fetchFromAPI('settings.system', 'GET', null, authToken);
-}
-
-export async function getAISettings(authToken: string) {
-  return fetchFromAPI('settings.aiStatus', 'GET', null, authToken);
-}
-
-// AI Assistant API functions
-export async function sendAIQuery(query: string, model: string, authToken: string | null, temperature: number = 0.7, maxTokens: number = 1024) {
-  console.log('DEBUG: sendAIQuery called with:', {
-    query,
-    model,
-    authToken: authToken ? 'token-present' : 'no-token',
-    temperature,
-    maxTokens
-  });
-
-  const result = await fetchFromAPI('ai.query', 'POST', {
-    query,
-    model,
-    temperature,
-    max_tokens: maxTokens,
-  }, authToken);
-
-  console.log('DEBUG: sendAIQuery result:', result);
-  return result;
-}
-
-export async function getAISuggestions(context: string, authToken: string) {
-  return fetchFromAPI('ai.suggestions', 'POST', {
-    context,
-  }, authToken);
+export async function registerUser(email: string, password: string, fullName: string) {
+  try {
+    const response = await axios.post(`${API_BASE_URL}/auth/register`, {
+      email,
+      password,
+      full_name: fullName,
+    });
+    return { data: response.data };
+  } catch (error) {
+    console.error('Registration error:', error);
+    if (axios.isAxiosError(error)) {
+      return { error: error.response?.data?.detail || error.message };
+    }
+    return { error: 'Registration failed' };
+  }
 }
