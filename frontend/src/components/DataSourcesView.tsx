@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Database, Cloud, Server, HardDrive, Plus, RefreshCw, AlertCircle, CheckCircle, Eye, X, Trash2 } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { Sidebar } from './Sidebar';
-import { Database, Cloud, Server, HardDrive, Plus, RefreshCw, AlertCircle, CheckCircle, Eye, X, Trash2 } from 'lucide-react';
 import { getDataSources, syncDataSource, type DataSource, type DataSourceCreate } from '../api/service';
 import { API_BASE_URL } from '../api/config';
 import { useAuth } from '../api/authContext';
@@ -77,73 +76,144 @@ const getColorForType = (type: string) => {
   return colorMap[type] || 'bg-gray-500';
 };
 
+const getGradientForType = (type: string) => {
+  const gradientMap: { [key: string]: string } = {
+    'MySQL': 'bg-gradient-to-br from-blue-400 via-blue-500 to-blue-600',
+    'PostgreSQL': 'bg-gradient-to-br from-indigo-400 via-indigo-500 to-indigo-600',
+    'SQL Server': 'bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600',
+    'MongoDB': 'bg-gradient-to-br from-green-400 via-green-500 to-green-600',
+    'Cloud': 'bg-gradient-to-br from-sky-400 via-sky-500 to-sky-600',
+    'API': 'bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600',
+    'csv': 'bg-gradient-to-br from-orange-400 via-orange-500 to-orange-600',
+    'excel': 'bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-600',
+  };
+  return gradientMap[type] || 'bg-gradient-to-br from-gray-400 via-gray-500 to-gray-600';
+};
+
 export function DataSourcesView({ currentView, onViewChange, onShowImportModal }: DataSourcesViewProps) {
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [syncingDataSources, setSyncingDataSources] = useState<Set<number>>(new Set());
   const [showImportModal, setShowImportModal] = useState(false);
-  const [showDataPreview, setShowDataPreview] = useState(false);
-  const [previewData, setPreviewData] = useState<{
-    rows: any[];
-    totalRows: number;
-    schema?: any;
-    dataSource?: DataSource;
-  } | null>(null);
-  const [previewSourceName, setPreviewSourceName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [dataSourceToDelete, setDataSourceToDelete] = useState<DataSource | null>(null);
   const [deletingDataSources, setDeletingDataSources] = useState<Set<number>>(new Set());
   const { token: authToken } = useAuth();
 
-  const handleShowImportModal = () => {
+  const handleShowImportModal = useCallback(() => {
     setShowImportModal(true);
-  };
+  }, []);
 
-  const handleCloseImportModal = () => {
+  const handleCloseImportModal = useCallback(() => {
     setShowImportModal(false);
-  };
+  }, []);
 
   const handleViewData = async (dataSource: DataSource) => {
     try {
-      // Récupérer les informations du schéma d'abord
-      let schemaInfo = null;
-      if (dataSource.schema_info) {
-        try {
-          schemaInfo = JSON.parse(dataSource.schema_info);
-        } catch (e) {
-          console.warn('Could not parse schema info');
+      console.log(`Lancement de l'interface tkinter pour la source: ${dataSource.name}`);
+      
+      // Essayer d'abord avec l'endpoint authentifié
+      let response;
+      try {
+        console.log('Tentative avec endpoint authentifié...');
+        console.log('Auth token présent:', !!authToken);
+        
+        response = await fetch(`${API_BASE_URL}/preview/launch-preview/${dataSource.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+          },
+          credentials: 'include'
+        });
+
+        console.log('Réponse authentifiée:', response.status, response.statusText);
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Interface tkinter lancée avec succès:', result);
+          alert(`Interface de prévisualisation lancée avec succès. PID: ${result.process_id}`);
+          return;
+        } else if (response.status === 401) {
+          console.log('Non autorisé - passage à l\'endpoint de test');
+          throw new Error('Non autorisé');
         }
+      } catch (authError) {
+        console.log('Erreur d\'authentification, tentative avec l\'endpoint de test...:', authError);
       }
 
-      // Récupérer les données réelles depuis le backend
-      const response = await fetch(`${API_BASE_URL}/data-sources/${dataSource.id}/data?limit=100`, {
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-      });
+      // Si l'endpoint authentifié échoue, essayer l'endpoint de test
+      console.log('Tentative avec l\'endpoint de test...');
+      try {
+        response = await fetch(`${API_BASE_URL}/preview/test-launch/${dataSource.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
 
-      if (!response.ok) {
-        console.error('Erreur lors de la récupération des données');
-        return;
+        console.log('Réponse de test:', response.status, response.statusText);
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Test de lancement réussi:', result);
+          alert(`Interface de prévisualisation lancée avec succès. PID: ${result.process_id}`);
+        } else {
+          console.error('Échec du test de lancement:', response.status, response.statusText);
+          throw new Error(`Échec du test de lancement: ${response.status} ${response.statusText}`);
+        }
+      } catch (testError) {
+        console.error('Erreur lors du test de lancement:', testError);
+        throw testError;
       }
-
-      const result = await response.json();
-      setPreviewData({
-        rows: result.rows || [],
-        totalRows: result.total_rows || result.rows?.length || 0,
-        schema: schemaInfo,
-        dataSource: dataSource
-      });
-      setPreviewSourceName(dataSource.name);
-      setShowDataPreview(true);
+      
     } catch (error) {
-      console.error('Erreur lors de la récupération des données:', error);
+      console.error('Erreur lors du lancement de l\'interface tkinter:', error);
+      
+      // Proposer une solution alternative
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const useDemo = confirm(
+        `Erreur lors du lancement de l'interface de prévisualisation: ${errorMessage}\n\n` +
+        'Souhaitez-vous lancer la démonstration avec des données fictives ?'
+      );
+      
+      if (useDemo) {
+        try {
+          // Lancer directement le script de démonstration
+          const demoResponse = await fetch('/api/demo-launch', {
+            method: 'POST'
+          });
+          if (demoResponse.ok) {
+            alert('Démonstration lancée avec succès !');
+          } else {
+            // Fallback: suggérer de lancer manuellement
+            alert(
+              'Pour tester l\'interface tkinter, exécutez cette commande dans un terminal :\n\n' +
+              'python test_tkinter_demo.py\n\n' +
+              'Cela ouvrira une fenêtre de démonstration avec des données fictives.'
+            );
+          }
+        } catch (demoError) {
+          console.error('Erreur de démonstration:', demoError);
+          alert(
+            'Pour tester l\'interface tkinter, exécutez cette commande dans un terminal :\n\n' +
+            'python test_tkinter_demo.py\n\n' +
+            'Cela ouvrira une fenêtre de démonstration avec des données fictives.'
+          );
+        }
+      } else {
+        // Si l'utilisateur ne veut pas la démonstration, donner des instructions claires
+        alert(
+          'Pour résoudre ce problème:\n\n' +
+          '1. Vérifiez que vous êtes connecté\n' +
+          '2. Assurez-vous que le backend est en cours d\'exécution\n' +
+          '3. Vérifiez la console pour plus de détails sur l\'erreur\n\n' +
+          'Vous pouvez également essayer de lancer manuellement avec:\n' +
+          'python test_tkinter_demo.py'
+        );
+      }
     }
-  };
-
-  const handleCloseDataPreview = () => {
-    setShowDataPreview(false);
-    setPreviewData(null);
-    setPreviewSourceName('');
   };
 
   const loadDataSources = async () => {
@@ -249,24 +319,34 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
     loadDataSources();
   }, [authToken]);
 
-  // Calculate statistics
-  const activeSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'Connecté');
-  const errorSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'Erreur');
-  const pausedSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'En pause');
-  
-  // Simulate total data volume
-  const totalVolume = '13.8M lignes';
-  
-  // Get the most recent sync
-  const mostRecentSync = dataSources.length > 0
-    ? dataSources.reduce((mostRecent, ds) => {
-        if (!ds.updated_at) return mostRecent;
-        const dsDate = new Date(ds.updated_at);
-        return isNaN(dsDate.getTime()) ? mostRecent : (dsDate > mostRecent ? dsDate : mostRecent);
-      }, new Date(dataSources[0].updated_at || Date.now()))
-    : new Date();
-  
-  const timeAgo = getLastSyncFromDate(mostRecentSync.toISOString());
+  // Calculate statistics with memoization
+  const statistics = useMemo(() => {
+    const activeSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'Connecté');
+    const errorSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'Erreur');
+    const pausedSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'En pause');
+
+    // Simulate total data volume
+    const totalVolume = '13.8M lignes';
+
+    // Get the most recent sync
+    const mostRecentSync = dataSources.length > 0
+      ? dataSources.reduce((mostRecent, ds) => {
+          if (!ds.updated_at) return mostRecent;
+          const dsDate = new Date(ds.updated_at);
+          return isNaN(dsDate.getTime()) ? mostRecent : (dsDate > mostRecent ? dsDate : mostRecent);
+        }, new Date(dataSources[0].updated_at || Date.now()))
+      : new Date();
+
+    const timeAgo = getLastSyncFromDate(mostRecentSync.toISOString());
+
+    return {
+      activeSources,
+      errorSources,
+      pausedSources,
+      totalVolume,
+      timeAgo
+    };
+  }, [dataSources]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -305,10 +385,10 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
             <p className="text-gray-600 text-sm">Gérez vos connexions aux sources de données</p>
           </div>
 
-          {/* Contenu principal avec split view */}
+          {/* Contenu principal */}
           <div className="flex-1 flex overflow-hidden">
-            {/* Panneau gauche - Liste des sources */}
-            <div className={`${showDataPreview ? 'w-1/3' : 'flex-1'} flex flex-col border-r border-gray-200 bg-white transition-all duration-300`}>
+            {/* Liste des sources */}
+            <div className="flex-1 flex flex-col border-r border-gray-200 bg-white">
               {/* Statistiques */}
               <div className="bg-white border-b border-gray-200 px-4 py-2 flex-shrink-0">
                 <div className="grid grid-cols-4 gap-4">
@@ -318,7 +398,7 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                     </div>
                     <div>
                       <p className="text-gray-600 text-sm">Actives</p>
-                      <p className="text-gray-800 text-sm">{activeSources.length} sources</p>
+                      <p className="text-gray-800 text-sm">{statistics.activeSources.length} sources</p>
                     </div>
                   </div>
 
@@ -328,7 +408,7 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                     </div>
                     <div>
                       <p className="text-gray-600 text-sm">Erreurs</p>
-                      <p className="text-gray-800 text-sm">{errorSources.length} source</p>
+                      <p className="text-gray-800 text-sm">{statistics.errorSources.length} source</p>
                     </div>
                   </div>
 
@@ -338,7 +418,7 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                     </div>
                     <div>
                       <p className="text-gray-600 text-sm">Total données</p>
-                      <p className="text-gray-800 text-sm">{totalVolume}</p>
+                      <p className="text-gray-800 text-sm">{statistics.totalVolume}</p>
                     </div>
                   </div>
 
@@ -348,7 +428,7 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                     </div>
                     <div>
                       <p className="text-gray-600 text-sm">Dernière sync</p>
-                      <p className="text-gray-800 text-sm">{timeAgo}</p>
+                      <p className="text-gray-800 text-sm">{statistics.timeAgo}</p>
                     </div>
                   </div>
                 </div>
@@ -377,114 +457,111 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                     <p className="text-sm">Créez votre première source de données pour commencer</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
                     {dataSources.map((source) => {
                       const Icon = getIconForType(source.type);
                       const status = getStatusFromDataSource(source);
                       const isError = status === 'Erreur';
                       const isPaused = status === 'En pause';
                       const isSyncing = syncingDataSources.has(source.id);
-                      const isSelected = previewData?.dataSource?.id === source.id;
 
                       return (
                         <div
                           key={source.id}
-                          className={`bg-white border rounded p-4 hover:shadow transition-all cursor-pointer ${
-                            isSelected ? 'border-[#0056D2] bg-blue-50' : 'border-gray-200'
-                          }`}
-                          onClick={() => handleViewData(source)}
+                          className="relative overflow-hidden bg-white border rounded-lg p-4 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer min-h-[180px] flex flex-col animate-in fade-in slide-in-from-bottom-2 border-gray-200"
+                          style={{ animationDelay: `${(dataSources.indexOf(source) % 12) * 50}ms` }}
                         >
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-start gap-3">
-                              <div className={`w-10 h-10 ${getColorForType(source.type)} rounded flex items-center justify-center`}>
-                                <Icon size={20} className="text-white" />
+                          {/* Background gradient overlay */}
+                          <div className={`absolute inset-0 opacity-5 ${getGradientForType(source.type)}`} />
+                          {/* Subtle pattern overlay */}
+                          <div className="absolute inset-0 opacity-10 bg-gradient-to-br from-transparent via-white to-transparent" />
+
+                          {/* Content */}
+                          <div className="relative z-10">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <div className={`w-12 h-12 ${getColorForType(source.type)} rounded-lg flex items-center justify-center shadow-sm`}>
+                                  <Icon size={24} className="text-white" />
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-gray-900 text-sm font-medium mb-1 truncate">{source.name}</h3>
+                                  <p className="text-gray-600 text-xs mb-1">{source.type}</p>
+                                  {source.schema_info && (() => {
+                                    try {
+                                      const schema = JSON.parse(source.schema_info);
+                                      if (schema.processing_info) {
+                                        const { detected_encoding, detected_delimiter } = schema.processing_info;
+                                        return (
+                                          <p className="text-gray-500 text-xs truncate">
+                                            {detected_encoding && `Encodage: ${detected_encoding}`}
+                                            {detected_encoding && detected_delimiter && ' • '}
+                                            {detected_delimiter && `Séparateur: '${detected_delimiter}'`}
+                                          </p>
+                                        );
+                                      }
+                                    } catch (e) {}
+                                    return null;
+                                  })()}
+                                </div>
                               </div>
 
-                              <div>
-                                <h3 className="text-gray-800 text-sm mb-0.5">{source.name}</h3>
-                                <p className="text-gray-600 text-xs">{source.type}</p>
-                                {source.schema_info && (() => {
-                                  try {
-                                    const schema = JSON.parse(source.schema_info);
-                                    if (schema.processing_info) {
-                                      const { detected_encoding, detected_delimiter } = schema.processing_info;
-                                      return (
-                                        <p className="text-gray-500 text-xs">
-                                          {detected_encoding && `Encodage: ${detected_encoding}`}
-                                          {detected_encoding && detected_delimiter && ' • '}
-                                          {detected_delimiter && `Séparateur: '${detected_delimiter}'`}
-                                        </p>
-                                      );
-                                    }
-                                  } catch (e) {}
-                                  return null;
-                                })()}
+                              <div className="flex flex-col items-end gap-2 ml-2">
+                                <span className={`px-2 py-1 rounded-full text-white text-xs font-medium ${
+                                  isError ? 'bg-red-500' :
+                                  isPaused ? 'bg-orange-500' :
+                                  'bg-green-500'
+                                }`}>
+                                  {status}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteDataSource(source);
+                                  }}
+                                  disabled={deletingDataSources.has(source.id)}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                                  title="Supprimer la source"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1">
-                              <span className={`px-2 py-0.5 rounded-full text-white text-xs ${
-                                isError ? 'bg-red-500' :
-                                isPaused ? 'bg-orange-500' :
-                                'bg-green-500'
-                              }`}>
-                                {status}
-                              </span>
+                            <div className="grid grid-cols-2 gap-4 mb-4 text-gray-600 text-xs">
+                              <div className="bg-gray-50 rounded-md p-2">
+                                <p className="text-gray-500 mb-1 font-medium">Dernière sync</p>
+                                <p className="text-gray-800 font-medium">{source.updated_at ? getLastSyncFromDate(source.updated_at) : 'N/A'}</p>
+                              </div>
+                              <div className="bg-gray-50 rounded-md p-2">
+                                <p className="text-gray-500 mb-1 font-medium">Volume</p>
+                                <p className="text-gray-800 font-medium">{getVolumeFromDataSource(source)}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex gap-2 mt-auto">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteDataSource(source);
+                                  handleSyncDataSource(source.id);
                                 }}
-                                disabled={deletingDataSources.has(source.id)}
-                                className="p-1 text-red-500 hover:bg-red-50 rounded disabled:opacity-50"
-                                title="Supprimer la source"
+                                disabled={isSyncing}
+                                className="flex-1 px-3 py-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0046b2] transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 shadow-sm hover:shadow-md"
                               >
-                                <Trash2 size={14} />
+                                <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
+                                {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewData(source);
+                                }}
+                                className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+                              >
+                                <Eye size={14} />
+                                Voir
                               </button>
                             </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3 mb-3 text-gray-600 text-xs">
-                            <div>
-                              <p className="mb-0.5">Dernière sync</p>
-                              <p className="text-gray-800">{source.updated_at ? getLastSyncFromDate(source.updated_at) : 'N/A'}</p>
-                            </div>
-                            <div>
-                              <p className="mb-0.5">Volume</p>
-                              <p className="text-gray-800">{getVolumeFromDataSource(source)}</p>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSyncDataSource(source.id);
-                              }}
-                              disabled={isSyncing}
-                              className="flex-1 px-3 py-1.5 bg-[#0056D2] text-white rounded hover:bg-[#0046b2] transition-colors flex items-center justify-center gap-1.5 text-xs disabled:opacity-50"
-                            >
-                              <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
-                              {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isSelected) {
-                                  handleCloseDataPreview();
-                                } else {
-                                  handleViewData(source);
-                                }
-                              }}
-                              className={`px-3 py-1.5 border rounded transition-colors text-xs flex items-center gap-1 ${
-                                isSelected
-                                  ? 'border-gray-300 text-gray-700 bg-gray-50'
-                                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                              }`}
-                            >
-                              <Eye size={12} />
-                              {isSelected ? 'Masquer' : 'Voir'}
-                            </button>
                           </div>
                         </div>
                       );
@@ -493,20 +570,6 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                 )}
               </div>
             </div>
-
-            {/* Panneau droit - Visualiseur de données */}
-            {showDataPreview && previewData && (
-              <div className="flex-1 flex flex-col bg-white border-l border-gray-200">
-                <DataPreviewPanel
-                  data={previewData.rows}
-                  totalRows={previewData.totalRows}
-                  schema={previewData.schema}
-                  dataSource={previewData.dataSource}
-                  fileName={previewSourceName}
-                  onClose={handleCloseDataPreview}
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -517,27 +580,6 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
           onClose={handleCloseImportModal}
           onDataSourceCreated={loadDataSources}
         />
-      )}
-
-      {/* Modale de visualisation des données */}
-      {showDataPreview && previewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={handleCloseDataPreview}
-          />
-
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] max-h-[90vh] overflow-hidden flex flex-col">
-            <DataPreviewPanel
-              data={previewData.rows}
-              totalRows={previewData.totalRows}
-              schema={previewData.schema}
-              dataSource={previewData.dataSource}
-              fileName={previewSourceName}
-              onClose={handleCloseDataPreview}
-            />
-          </div>
-        </div>
       )}
 
       {/* Modale de confirmation de suppression */}
@@ -595,261 +637,6 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// Modal de prévisualisation des données (réutilisable)
-interface DataPreviewModalProps {
-  data: any[];
-  totalRows?: number;
-  schema?: any;
-  dataSource?: DataSource;
-  fileName: string;
-  onClose: () => void;
-  onConfirm: () => void;
-}
-
-function DataPreviewPanel({ data, totalRows, schema, dataSource, fileName, onClose }: Omit<DataPreviewModalProps, 'onConfirm'>) {
-  const [showOptions, setShowOptions] = useState(false);
-  const [displayMode, setDisplayMode] = useState<'first' | 'last' | 'range'>('first');
-  const [rowCount, setRowCount] = useState(10);
-  const [startRow, setStartRow] = useState(0);
-  const [endRow, setEndRow] = useState(49);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Initialize visible columns (limit to 10 by default)
-  useEffect(() => {
-    if (data && data.length > 0) {
-      const allColumns = Object.keys(data[0]);
-      setVisibleColumns(allColumns.slice(0, 10)); // Show only first 10 columns by default
-    }
-  }, [data]);
-
-  if (!data || data.length === 0) return null;
-
-  const allColumns = Object.keys(data[0]);
-
-  // Filter and slice data based on current settings
-  let displayData = [...data];
-
-  // Apply row filtering
-  if (displayMode === 'first') {
-    displayData = displayData.slice(0, rowCount);
-  } else if (displayMode === 'last') {
-    displayData = displayData.slice(-rowCount);
-  } else if (displayMode === 'range') {
-    displayData = displayData.slice(startRow, endRow + 1);
-  }
-
-  // Apply column filtering
-  const filteredColumns = allColumns.filter(col => visibleColumns.includes(col));
-
-  // Apply search filtering
-  if (searchTerm) {
-    displayData = displayData.filter(row =>
-      filteredColumns.some(col =>
-        String(row[col]).toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    );
-  }
-
-  const toggleColumn = (column: string) => {
-    setVisibleColumns(prev =>
-      prev.includes(column)
-        ? prev.filter(c => c !== column)
-        : [...prev, column]
-    );
-  };
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 flex-shrink-0 bg-white">
-        <div className="flex items-center gap-4">
-          <h3 className="text-lg font-medium text-gray-800">
-            Données: {fileName}
-          </h3>
-          <div className="text-sm text-gray-500">
-            {totalRows ? `${totalRows} lignes totales` : `${data.length} lignes chargées`}
-            {schema?.column_count && ` • ${schema.column_count} colonnes`}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowOptions(!showOptions)}
-            className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-sm flex items-center gap-1"
-          >
-            ⚙️ Options
-          </button>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-      </div>
-
-      {/* Options Panel */}
-      {showOptions && (
-        <div className="border-b border-gray-200 bg-gray-50 p-4 flex-shrink-0">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Row Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Lignes à afficher
-              </label>
-              <div className="space-y-2">
-                <select
-                  value={displayMode}
-                  onChange={(e) => setDisplayMode(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                >
-                  <option value="first">Premières lignes</option>
-                  <option value="last">Dernières lignes</option>
-                  <option value="range">Plage personnalisée</option>
-                </select>
-
-                {displayMode === 'range' ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      placeholder="Début"
-                      value={startRow}
-                      onChange={(e) => setStartRow(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Fin"
-                      value={endRow}
-                      onChange={(e) => setEndRow(Math.max(startRow, parseInt(e.target.value) || 0))}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    />
-                  </div>
-                ) : (
-                  <input
-                    type="number"
-                    placeholder="Nombre de lignes"
-                    value={rowCount}
-                    onChange={(e) => setRowCount(Math.max(1, parseInt(e.target.value) || 10))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* Column Selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Colonnes ({visibleColumns.length}/{allColumns.length} visibles)
-              </label>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setVisibleColumns(allColumns.slice(0, 10))}
-                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-                  >
-                    10 premières
-                  </button>
-                  <button
-                    onClick={() => setVisibleColumns(allColumns)}
-                    className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded"
-                  >
-                    Toutes ({allColumns.length})
-                  </button>
-                </div>
-                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-lg p-2">
-                  {allColumns.map(column => (
-                    <label key={column} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns.includes(column)}
-                        onChange={() => toggleColumn(column)}
-                        className="rounded"
-                      />
-                      {column}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Search */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Rechercher
-              </label>
-              <input
-                type="text"
-                placeholder="Rechercher dans les données..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Data Table */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-sm text-gray-600">
-          Affichage de {displayData.length} lignes • {filteredColumns.length} colonnes
-          {searchTerm && ` • Recherche: "${searchTerm}"`}
-          <div className="text-xs text-gray-500 mt-1">Table simplifiée temporairement</div>
-        </div>
-
-        <div className="flex-1 overflow-hidden">
-          <div className="h-full flex flex-col">
-            {/* Scroll horizontal et vertical pour le tableau */}
-            <div className="flex-1 overflow-auto">
-              <div className="inline-block min-w-full">
-                <table className="w-full border border-gray-300">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-300 bg-gray-50 sticky left-0 z-20">
-                        #
-                      </th>
-                      {filteredColumns.map((column) => (
-                        <th
-                          key={column}
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-300 bg-gray-50 whitespace-nowrap"
-                        >
-                          {column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {displayData.map((row, index) => (
-                      <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                        <td className="px-4 py-3 text-sm text-gray-500 border-b border-gray-200 font-mono sticky left-0 bg-inherit z-10">
-                          {(displayMode === 'first' ? index :
-                            displayMode === 'last' ? (data.length - rowCount + index) :
-                            startRow + index) + 1}
-                        </td>
-                        {filteredColumns.map((column) => (
-                          <td
-                            key={column}
-                            className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200 max-w-xs truncate whitespace-nowrap"
-                            title={String(row[column])}
-                          >
-                            {String(row[column])}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
     </div>
   );
 }
