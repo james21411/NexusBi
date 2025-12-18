@@ -200,11 +200,11 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
       />
       
       {/* Modale */}
-      <div className="relative bg-white rounded-xl shadow-2xl w-[800px] max-w-[95vw] h-[600px] max-h-[95vh] overflow-hidden flex flex-col">
+      <div className="relative bg-white rounded-xl shadow-2xl w-[700px] max-w-[95vw] h-[600px] max-h-[95vh] overflow-hidden flex flex-col">
         {/* En-tête */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-gray-800">Importer une nouvelle source</h2>
-          <button 
+          <h2 className="text-gray-800 text-lg font-semibold">Importer une nouvelle source</h2>
+          <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
@@ -216,7 +216,7 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
         <div className="flex border-b border-gray-200 px-6 flex-shrink-0">
           <button
             onClick={() => setActiveTab('files')}
-            className={`px-4 py-2 relative transition-colors text-sm ${
+            className={`px-5 py-3 relative transition-colors text-base font-medium ${
               activeTab === 'files'
                 ? 'text-gray-800'
                 : 'text-gray-500 hover:text-gray-700'
@@ -230,7 +230,7 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
           
           <button
             onClick={() => setActiveTab('database')}
-            className={`px-4 py-2 relative transition-colors text-sm ${
+            className={`px-5 py-3 relative transition-colors text-base font-medium ${
               activeTab === 'database'
                 ? 'text-gray-800'
                 : 'text-gray-500 hover:text-gray-700'
@@ -244,7 +244,7 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
           
           <button
             onClick={() => setActiveTab('api')}
-            className={`px-4 py-2 relative transition-colors text-sm ${
+            className={`px-5 py-3 relative transition-colors text-base font-medium ${
               activeTab === 'api'
                 ? 'text-gray-800'
                 : 'text-gray-500 hover:text-gray-700'
@@ -260,31 +260,31 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
         {/* Contenu principal */}
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'files' && (
-            <div className="flex gap-6 h-full">
-              {/* Section gauche - Types de fichiers */}
-              <div className="w-80 flex-shrink-0">
-                <h3 className="text-lg font-medium text-gray-800 mb-4">Type de fichier</h3>
-                <div className="space-y-2">
+            <div className="flex gap-4 h-full">
+              {/* Section gauche - Types de fichiers - Largeur adaptative */}
+              <div className="w-64 flex-shrink-0">
+                <h3 className="text-base font-semibold text-gray-800 mb-4">Type de fichier</h3>
+                <div className="space-y-3">
                   {fileTypes.map((type) => {
                     const Icon = type.icon;
                     return (
                       <button
                         key={type.id}
                         onClick={() => setSelectedFileType(type.id)}
-                        className={`w-full p-3 border-2 rounded-lg text-left transition-all ${
+                        className={`w-full p-4 border-2 rounded-lg text-left transition-all ${
                           selectedFileType === type.id
                             ? 'border-[#0056D2] bg-blue-50'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 ${type.color} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                            <Icon size={16} className="text-white" />
+                          <div className={`w-9 h-9 ${type.color} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                            <Icon size={18} className="text-white" />
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-medium text-gray-800 text-sm">{type.name}</h4>
-                            <p className="text-xs text-gray-600 truncate">{type.description}</p>
-                            <p className="text-xs text-gray-500">
+                            <h4 className="font-semibold text-gray-800 text-base">{type.name}</h4>
+                            <p className="text-sm text-gray-600 truncate">{type.description}</p>
+                            <p className="text-sm text-gray-500">
                               {type.extensions.join(', ')}
                             </p>
                           </div>
@@ -297,11 +297,11 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
 
               {/* Section droite - Zone de drop et configuration */}
               <div className="flex-1 flex flex-col">
-                <h3 className="text-lg font-medium text-gray-800 mb-4">Sélectionner un fichier</h3>
+                <h3 className="text-base font-semibold text-gray-800 mb-4">Sélectionner un fichier</h3>
                 
                 {/* Zone de drag & drop */}
                 <div
-                  className={`flex-1 border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-all min-h-[300px] ${
+                  className={`flex-1 border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-all min-h-[320px] ${
                     isDragging
                       ? 'border-[#0056D2] bg-blue-50'
                       : 'border-gray-300 bg-gray-50'
@@ -312,13 +312,13 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
                 >
                   {selectedType && (
                     <>
-                      <div className={`w-12 h-12 ${selectedType.color} rounded-xl flex items-center justify-center mb-4`}>
-                        <selectedType.icon size={24} className="text-white" />
+                      <div className={`w-14 h-14 ${selectedType.color} rounded-xl flex items-center justify-center mb-4`}>
+                        <selectedType.icon size={28} className="text-white" />
                       </div>
                       
                       {uploadedFile ? (
                         <div className="text-center">
-                          <p className="text-gray-700 font-medium mb-1">{uploadedFile.name}</p>
+                          <p className="text-gray-700 font-semibold mb-2 text-base">{uploadedFile.name}</p>
                           <p className="text-sm text-gray-500 mb-4">
                             {uploadedFile.size > 0 ? `${uploadedFile.size.toLocaleString()} octets (${(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)` : 'Calcul en cours...'}
                           </p>
@@ -331,13 +331,13 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
                         </div>
                       ) : (
                         <>
-                          <p className="text-gray-700 mb-2 text-center">
+                          <p className="text-gray-700 mb-2 text-center text-base font-medium">
                             Glissez-déposez votre fichier {selectedType.name} ici
                           </p>
                           <p className="text-gray-500 mb-4">ou</p>
                           
                           <label className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2 cursor-pointer">
-                            <Upload size={16} />
+                            <Upload size={18} />
                             Parcourir les fichiers
                             <input
                               key={`file-input-${selectedFileType}`}
@@ -370,8 +370,8 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <Database size={64} className="mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-800 mb-2">Connexion base de données</h3>
-                <p className="text-gray-600">Configuration des connexions aux bases de données</p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">Connexion base de données</h3>
+                <p className="text-gray-600 text-base">Configuration des connexions aux bases de données</p>
                 <p className="text-sm text-gray-500 mt-2">Fonctionnalité en développement</p>
               </div>
             </div>
@@ -381,8 +381,8 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <Table size={64} className="mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-medium text-gray-800 mb-2">API REST</h3>
-                <p className="text-gray-600">Configuration des APIs REST externes</p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">API REST</h3>
+                <p className="text-gray-600 text-base">Configuration des APIs REST externes</p>
                 <p className="text-sm text-gray-500 mt-2">Fonctionnalité en développement</p>
               </div>
             </div>
@@ -393,14 +393,14 @@ export function SqlImportModal({ onClose, onDataSourceCreated }: SqlImportModalP
         <div className="flex justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            className="px-6 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-base font-medium"
           >
             Annuler
           </button>
-          <button 
+          <button
             onClick={handleAnalyze}
             disabled={!uploadedFile}
-            className="px-6 py-2 bg-[#FF6B00] text-white rounded-lg hover:bg-[#e56100] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-[#FF6B00] text-white rounded-lg hover:bg-[#e56100] transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base font-medium"
           >
             Charger
           </button>
@@ -466,12 +466,12 @@ function FileConfigModal({ fileType, detectedSettings, onClose, onConfirm }: Fil
         onClick={onClose}
       />
       
-      <div className="relative bg-white rounded-xl shadow-2xl w-[500px] max-w-[90vw]">
+      <div className="relative bg-white rounded-xl shadow-2xl w-[480px] max-w-[90vw]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-800">
+          <h3 className="text-lg font-semibold text-gray-800">
             Configuration {fileType.toUpperCase()}
           </h3>
-          <button 
+          <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
@@ -479,10 +479,10 @@ function FileConfigModal({ fileType, detectedSettings, onClose, onConfirm }: Fil
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-5">
           {detectedSettings && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-              <h4 className="text-sm font-medium text-blue-800 mb-2">Paramètres détectés automatiquement</h4>
+              <h4 className="text-sm font-semibold text-blue-800 mb-2">Paramètres détectés automatiquement</h4>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-gray-600">Encodage:</span>
@@ -505,10 +505,10 @@ function FileConfigModal({ fileType, detectedSettings, onClose, onConfirm }: Fil
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               Séparateur
             </label>
-            <select 
+            <select
               value={delimiter}
               onChange={(e) => setDelimiter(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0056D2] focus:border-transparent"
@@ -521,10 +521,10 @@ function FileConfigModal({ fileType, detectedSettings, onClose, onConfirm }: Fil
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               Séparateur décimal
             </label>
-            <select 
+            <select
               value={decimalSeparator}
               onChange={(e) => setDecimalSeparator(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0056D2] focus:border-transparent"
@@ -542,16 +542,16 @@ function FileConfigModal({ fileType, detectedSettings, onClose, onConfirm }: Fil
               onChange={(e) => setHasHeader(e.target.checked)}
               className="w-4 h-4 text-[#0056D2] bg-gray-100 border-gray-300 rounded focus:ring-[#0056D2] focus:ring-2"
             />
-            <label htmlFor="hasHeader" className="ml-2 text-sm text-gray-700">
+            <label htmlFor="hasHeader" className="ml-2 text-sm text-gray-700 font-medium">
               La première ligne contient les en-têtes de colonnes
             </label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               Encodage
             </label>
-            <select 
+            <select
               value={encoding}
               onChange={(e) => setEncoding(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#0056D2] focus:border-transparent"
@@ -566,13 +566,13 @@ function FileConfigModal({ fileType, detectedSettings, onClose, onConfirm }: Fil
         <div className="flex justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-xl">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
           >
             Annuler
           </button>
-          <button 
+          <button
             onClick={handleConfirm}
-            className="px-4 py-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0046b2] transition-colors"
+            className="px-4 py-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0046b2] transition-colors font-medium"
           >
             Confirmer
           </button>
@@ -603,12 +603,12 @@ function DataPreviewModal({ data, fileName, onClose, onConfirm }: DataPreviewMod
         onClick={onClose}
       />
       
-      <div className="relative bg-white rounded-xl shadow-2xl w-[90vw] max-w-[1200px] max-h-[90vh] flex flex-col">
+      <div className="relative bg-white rounded-xl shadow-2xl w-[90vw] max-w-[1000px] max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-          <h3 className="text-lg font-medium text-gray-800">
+          <h3 className="text-lg font-semibold text-gray-800">
             Prévisualisation: {fileName}
           </h3>
-          <button 
+          <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
           >
@@ -618,7 +618,7 @@ function DataPreviewModal({ data, fileName, onClose, onConfirm }: DataPreviewMod
 
         <div className="flex-1 overflow-hidden flex flex-col">
           <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 font-medium">
               {data.length} lignes affichées sur {data.length} total • {columns.length} colonnes
             </p>
           </div>
@@ -629,9 +629,9 @@ function DataPreviewModal({ data, fileName, onClose, onConfirm }: DataPreviewMod
                 <thead className="bg-gray-50">
                   <tr>
                     {columns.map((column) => (
-                      <th 
+                      <th
                         key={column}
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-300"
+                        className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-b border-gray-300"
                       >
                         {column}
                       </th>
@@ -642,7 +642,7 @@ function DataPreviewModal({ data, fileName, onClose, onConfirm }: DataPreviewMod
                   {data.slice(0, maxRows).map((row, index) => (
                     <tr key={index} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                       {columns.map((column) => (
-                        <td 
+                        <td
                           key={column}
                           className="px-4 py-3 text-sm text-gray-900 border-b border-gray-200"
                         >
@@ -660,13 +660,13 @@ function DataPreviewModal({ data, fileName, onClose, onConfirm }: DataPreviewMod
         <div className="flex justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
           >
             Annuler
           </button>
-          <button 
+          <button
             onClick={onConfirm}
-            className="px-4 py-2 bg-[#FF6B00] text-white rounded-lg hover:bg-[#e56100] transition-colors"
+            className="px-4 py-2 bg-[#FF6B00] text-white rounded-lg hover:bg-[#e56100] transition-colors font-medium"
           >
             Confirmer le chargement
           </button>

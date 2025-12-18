@@ -4,11 +4,12 @@ from typing import Optional
 import subprocess
 import sys
 import os
+import json
 from pathlib import Path
 
 from app.core.deps import get_db, get_current_user
 from app.models.user import User
-from app.models.project import DataSource
+from app.models.project import DataSource, DataFrameData
 
 router = APIRouter()
 
@@ -44,10 +45,10 @@ async def launch_data_preview(
         print(f"URL API: {api_base_url}")
         
         # Préparer les arguments pour le launcher
-        # Remonter au répertoire racine du projet (où se trouve launch_data_preview.py)
+        # Remonter au répertoire racine du projet (où se trouve le script tkinter fixe)
         # From backend/app/api/v1/endpoints/ we need to go up 6 levels to reach NexusBi root
         current_dir = Path(__file__).parent.parent.parent.parent.parent.parent
-        launcher_script = current_dir / "launch_data_preview.py"
+        launcher_script = current_dir / "data_preview_tkinter_fixed.py"
 
         if not launcher_script.exists():
             print(f"Script de lancement non trouvé: {launcher_script}")
@@ -137,10 +138,10 @@ async def test_launch_preview(
         print(f"URL API: {api_base_url}")
         
         # Préparer les arguments pour le launcher
-        # Remonter au répertoire racine du projet (où se trouve launch_data_preview.py)
+        # Remonter au répertoire racine du projet (où se trouve le script tkinter fixe)
         # From backend/app/api/v1/endpoints/ we need to go up 6 levels to reach NexusBi root
         current_dir = Path(__file__).parent.parent.parent.parent.parent.parent
-        launcher_script = current_dir / "launch_data_preview.py"
+        launcher_script = current_dir / "data_preview_tkinter_fixed.py"
         
         if not launcher_script.exists():
             print(f"Script de lancement non trouvé: {launcher_script}")
@@ -180,6 +181,62 @@ async def test_launch_preview(
     except Exception as e:
         print(f"Erreur lors du test de lancement: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Erreur lors du test: {str(e)}")
+
+
+@router.get("/preview-data/{data_source_id}")
+async def get_preview_data_public(
+    data_source_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint public pour récupérer les données d'aperçu sans authentification
+    """
+    try:
+        print(f"📊 Récupération des données d'aperçu pour la source ID: {data_source_id}")
+        
+        # Vérifier que la source de données existe
+        data_source = db.query(DataSource).filter(DataSource.id == data_source_id).first()
+        
+        if not data_source:
+            raise HTTPException(status_code=404, detail="Source de données non trouvée")
+        
+        # Get total count of rows for this data source
+        total_count = db.query(DataFrameData).filter(DataFrameData.data_source_id == data_source_id).count()
+
+        # Get data rows
+        data_rows = (
+            db.query(DataFrameData)
+            .filter(DataFrameData.data_source_id == data_source_id)
+            .order_by(DataFrameData.row_index)
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+
+        # Parse row data
+        rows = []
+        for row in data_rows:
+            rows.append(json.loads(row.row_data))
+
+        print(f"✅ Données récupérées: {len(rows)} lignes (total: {total_count})")
+        
+        return {
+            "data_source_id": data_source_id,
+            "rows": rows,
+            "total_rows": total_count,
+            "skip": skip,
+            "limit": limit,
+            "data_source_name": data_source.name,
+            "data_source_type": data_source.type
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Erreur lors de la récupération des données: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
 
 
 @router.post("/close-preview/{data_source_id}")

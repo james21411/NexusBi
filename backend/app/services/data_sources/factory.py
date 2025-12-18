@@ -5,6 +5,7 @@ from .csv_strategy import CSVStrategy
 from .excel_strategy import ExcelStrategy
 from .json_strategy import JSONStrategy
 from .txt_strategy import TXTStrategy
+from .sql_dump_strategy import SQLDumpStrategy
 
 # Optional imports for database connectors
 try:
@@ -45,8 +46,7 @@ class DataSourceFactory:
                 raise NotImplementedError("PostgreSQL strategy not available. Please install psycopg2.")
             return PostgreSQLStrategy(config)
         elif source_type.lower() == "sql_dump":
-            # TODO: Implement SQLDumpStrategy
-            raise NotImplementedError("SQL dump strategy not implemented yet")
+            return SQLDumpStrategy(config)
         elif source_type.lower() == "mongodb":
             # TODO: Implement MongoDBStrategy
             raise NotImplementedError("MongoDB strategy not implemented yet")

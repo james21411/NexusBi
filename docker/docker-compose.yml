@@ -38,6 +38,7 @@ services:
       - POSTGRES_SERVER=postgres
       - REDIS_URL=redis://redis:6379/0
       - BACKEND_CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+      - DISPLAY=${DISPLAY}
     ports:
       - "8000:8000"
     depends_on:
@@ -48,6 +49,7 @@ services:
     volumes:
       - ../backend:/app
       - /app/__pycache__
+      - /tmp/.X11-unix:/tmp/.X11-unix
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
   # Celery Worker

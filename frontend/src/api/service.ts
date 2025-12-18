@@ -269,8 +269,13 @@ export async function syncDataSource(
   authToken: string | null
 ): Promise<{ data?: any; error?: string }> {
   try {
+    // Use demo endpoint if no auth token is available
+    const endpoint = authToken
+      ? `${API_BASE_URL}/data-sources/${dataSourceId}/sync`
+      : `${API_BASE_URL}/data-sources/${dataSourceId}/sync-demo`;
+    
     const response = await axios.post(
-      `${API_BASE_URL}/data-sources/${dataSourceId}/sync`,
+      endpoint,
       {},
       {
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},

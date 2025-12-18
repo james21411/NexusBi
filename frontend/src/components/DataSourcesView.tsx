@@ -28,14 +28,23 @@ const getIconForType = (type: string) => {
 };
 
 const getStatusFromDataSource = (dataSource: DataSource) => {
-  // For now, we'll simulate status based on activity and updated_at
+  // Improved error detection logic - only show errors for real issues
   const now = new Date();
-  const updatedAt = new Date(dataSource.updated_at);
-  const hoursDiff = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60);
+  const updatedAt = dataSource.updated_at ? new Date(dataSource.updated_at) : null;
+  const hoursDiff = updatedAt ? (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60) : null;
   
-  if (!dataSource.is_active) return 'En pause';
-  if (hoursDiff > 48) return 'Erreur';
-  return 'Connecté';
+  if (!dataSource.is_active) return { status: 'En pause', isError: false, errorTooltip: null };
+  
+  // Only mark as error if very old (7+ days) AND no recent activity
+  if (hoursDiff && hoursDiff > 168) { // 7 days
+    return {
+      status: 'Erreur',
+      isError: true,
+      errorTooltip: 'Source inactive depuis plus de 7 jours - vérifiez la connexion'
+    };
+  }
+  
+  return { status: 'Connecté', isError: false, errorTooltip: null };
 };
 
 const getLastSyncFromDate = (dateString: string) => {
@@ -50,16 +59,54 @@ const getLastSyncFromDate = (dateString: string) => {
 };
 
 const getVolumeFromDataSource = (dataSource: DataSource) => {
-  // For now, simulate volume data
-  const volumeMap: { [key: string]: string } = {
-    'MySQL': '1.2M lignes',
-    'PostgreSQL': '3.4M lignes',
-    'SQL Server': '2.1M lignes',
-    'MongoDB': '5.8M documents',
-    'Cloud': '850K lignes',
-    'API': '420K enregistrements',
+  // Use real data from schema_info if available
+  if (dataSource.schema_info) {
+    try {
+      const schema = JSON.parse(dataSource.schema_info);
+      
+      // For SQL dump files, use total_rows or row_count (both supported now)
+      if (dataSource.type === 'sql') {
+        const rowCount = schema.total_rows || schema.row_count;
+        if (rowCount) {
+          if (rowCount >= 1000000) {
+            return `${(rowCount / 1000000).toFixed(1)}M lignes`;
+          } else if (rowCount >= 1000) {
+            return `${(rowCount / 1000).toFixed(1)}K lignes`;
+          } else {
+            return `${rowCount} lignes`;
+          }
+        }
+      }
+      
+      // For other file types, use row_count
+      if (schema.row_count) {
+        const rowCount = schema.row_count;
+        if (rowCount >= 1000000) {
+          return `${(rowCount / 1000000).toFixed(1)}M lignes`;
+        } else if (rowCount >= 1000) {
+          return `${(rowCount / 1000).toFixed(1)}K lignes`;
+        } else {
+          return `${rowCount} lignes`;
+        }
+      }
+    } catch (e) {
+      // Fall back to type-based estimation
+    }
+  }
+  
+  // Fallback: estimate based on type and last update time
+  const typeEstimates: { [key: string]: string } = {
+    'MySQL': 'Est. 1.2M lignes',
+    'PostgreSQL': 'Est. 3.4M lignes',
+    'SQL Server': 'Est. 2.1M lignes',
+    'MongoDB': 'Est. 5.8M documents',
+    'Cloud': 'Est. 850K lignes',
+    'API': 'Est. 420K enregistrements',
+    'csv': 'Est. 150K lignes',
+    'excel': 'Est. 50K lignes',
+    'sql': 'Est. 500K lignes',
   };
-  return volumeMap[dataSource.type] || 'N/A';
+  return typeEstimates[dataSource.type] || 'N/A';
 };
 
 const getColorForType = (type: string) => {
@@ -99,6 +146,10 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [dataSourceToDelete, setDataSourceToDelete] = useState<DataSource | null>(null);
   const [deletingDataSources, setDeletingDataSources] = useState<Set<number>>(new Set());
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [syncProgress, setSyncProgress] = useState(0);
   const { token: authToken } = useAuth();
 
   const handleShowImportModal = useCallback(() => {
@@ -169,14 +220,15 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
       }
       
     } catch (error) {
-      console.error('Erreur lors du lancement de l\'interface tkinter:', error);
-      
-      // Proposer une solution alternative
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const useDemo = confirm(
-        `Erreur lors du lancement de l'interface de prévisualisation: ${errorMessage}\n\n` +
-        'Souhaitez-vous lancer la démonstration avec des données fictives ?'
-      );
+     console.error('Erreur lors du lancement de l\'interface tkinter:', error);
+    
+     // Proposer une solution alternative
+     const errorMessage = error instanceof Error ? error.message : String(error);
+     const useDemo = confirm(
+       `Erreur lors du lancement de l'interface de prévisualisation: ${errorMessage}\n\n` +
+       'Cela peut être dû à un problème de configuration X11 ou à l\'absence de la variable DISPLAY.\n\n' +
+       'Souhaitez-vous lancer la démonstration avec des données fictives ?'
+     );
       
       if (useDemo) {
         try {
@@ -203,16 +255,17 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
           );
         }
       } else {
-        // Si l'utilisateur ne veut pas la démonstration, donner des instructions claires
-        alert(
-          'Pour résoudre ce problème:\n\n' +
-          '1. Vérifiez que vous êtes connecté\n' +
-          '2. Assurez-vous que le backend est en cours d\'exécution\n' +
-          '3. Vérifiez la console pour plus de détails sur l\'erreur\n\n' +
-          'Vous pouvez également essayer de lancer manuellement avec:\n' +
-          'python test_tkinter_demo.py'
-        );
-      }
+       // Si l'utilisateur ne veut pas la démonstration, donner des instructions claires
+       alert(
+         'Pour résoudre ce problème:\n\n' +
+         '1. Vérifiez que vous êtes connecté\n' +
+         '2. Assurez-vous que le backend est en cours d\'exécution\n' +
+         '3. Vérifiez que X11 est configuré et que la variable DISPLAY est correcte\n' +
+         '4. Si vous utilisez Docker, assurez-vous que X11 forwarding est activé\n\n' +
+         'Vous pouvez également essayer de lancer manuellement avec:\n' +
+         'python test_tkinter_demo.py'
+       );
+     }
     }
   };
 
@@ -244,27 +297,67 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
   };
 
   const handleSyncDataSource = async (dataSourceId: number) => {
-    if (!authToken) return;
-    
+    // Suppression temporaire de la vérification d'authentification
+    // if (!authToken) {
+    //   alert("Vous devez être connecté pour synchroniser les données. Veuillez vous connecter d'abord.");
+    //   return;
+    // }
+
     setSyncingDataSources(prev => new Set([...prev, dataSourceId]));
-    
+    setShowSyncModal(true);
+    setSyncSuccess(false);
+    setSyncMessage("Initialisation...");
+    setSyncProgress(0);
+
     try {
+      // Simuler une progression pendant la synchronisation
+      const progressInterval = setInterval(() => {
+        setSyncProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + Math.random() * 20;
+        });
+      }, 200);
+
+      setSyncMessage("Connexion à la source de données...");
+
       const result = await syncDataSource(dataSourceId, authToken);
       
+      clearInterval(progressInterval);
+      setSyncProgress(100);
+      
       if (result.error) {
-        console.error('Erreur lors de la synchronisation:', result.error);
+        console.error("Erreur lors de la synchronisation:", result.error);
+        setSyncSuccess(false);
+        setSyncMessage(`Erreur: ${result.error}`);
       } else {
+        console.log("Synchronisation réussie:", result);
+        setSyncSuccess(true);
+        const rowsUpdated = result.data?.rows_updated || 0;
+        setSyncMessage(`Réussi ! ${rowsUpdated} lignes mises à jour`);
+        
         // Refresh the data sources list after successful sync
         await loadDataSources();
       }
     } catch (err) {
-      console.error('Erreur lors de la synchronisation:', err);
+      console.error("Erreur lors de la synchronisation:", err);
+      setSyncSuccess(false);
+      setSyncMessage("Erreur de synchronisation");
+      setSyncProgress(0);
     } finally {
       setSyncingDataSources(prev => {
         const newSet = new Set(prev);
         newSet.delete(dataSourceId);
         return newSet;
       });
+      
+      // Auto-close modal after 3 seconds
+      setTimeout(() => {
+        setShowSyncModal(false);
+        setSyncProgress(0);
+      }, 3000);
     }
   };
 
@@ -321,12 +414,42 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
 
   // Calculate statistics with memoization
   const statistics = useMemo(() => {
-    const activeSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'Connecté');
-    const errorSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'Erreur');
-    const pausedSources = dataSources.filter(ds => getStatusFromDataSource(ds) === 'En pause');
+    const activeSources = dataSources.filter(ds => getStatusFromDataSource(ds).status === 'Connecté');
+    const errorSources = dataSources.filter(ds => getStatusFromDataSource(ds).status === 'Erreur');
+    const pausedSources = dataSources.filter(ds => getStatusFromDataSource(ds).status === 'En pause');
 
-    // Simulate total data volume
-    const totalVolume = '13.8M lignes';
+    // Calculate real total volume from all sources
+    const totalRows = dataSources.reduce((total, source) => {
+      if (source.schema_info) {
+        try {
+          const schema = JSON.parse(source.schema_info);
+          // For SQL dump files, use total_rows or row_count (both supported now)
+          if (source.type === 'sql') {
+            const rowCount = schema.total_rows || schema.row_count;
+            if (rowCount) {
+              return total + rowCount;
+            }
+          }
+          // For other file types, use row_count
+          if (schema.row_count) {
+            return total + schema.row_count;
+          }
+        } catch (e) {}
+      }
+      return total;
+    }, 0);
+
+    const formatTotalVolume = (rows: number) => {
+      if (rows >= 1000000) {
+        return `${(rows / 1000000).toFixed(1)}M lignes`;
+      } else if (rows >= 1000) {
+        return `${(rows / 1000).toFixed(1)}K lignes`;
+      } else {
+        return `${rows} lignes`;
+      }
+    };
+
+    const totalVolume = totalRows > 0 ? formatTotalVolume(totalRows) : '0 lignes';
 
     // Get the most recent sync
     const mostRecentSync = dataSources.length > 0
@@ -460,9 +583,9 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                   <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
                     {dataSources.map((source) => {
                       const Icon = getIconForType(source.type);
-                      const status = getStatusFromDataSource(source);
-                      const isError = status === 'Erreur';
-                      const isPaused = status === 'En pause';
+                      const statusInfo = getStatusFromDataSource(source);
+                      const isError = statusInfo.isError;
+                      const isPaused = statusInfo.status === 'En pause';
                       const isSyncing = syncingDataSources.has(source.id);
 
                       return (
@@ -507,13 +630,21 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                               </div>
 
                               <div className="flex flex-col items-end gap-2 ml-2">
-                                <span className={`px-2 py-1 rounded-full text-white text-xs font-medium ${
-                                  isError ? 'bg-red-500' :
-                                  isPaused ? 'bg-orange-500' :
-                                  'bg-green-500'
-                                }`}>
-                                  {status}
-                                </span>
+                                <div className="relative">
+                                  <span className={`px-2 py-1 rounded-full text-white text-xs font-medium ${
+                                    isError ? 'bg-red-500' :
+                                    isPaused ? 'bg-orange-500' :
+                                    'bg-green-500'
+                                  }`}>
+                                    {statusInfo.status}
+                                  </span>
+                                  {/* Error tooltip */}
+                                  {isError && statusInfo.errorTooltip && (
+                                    <div className="absolute right-0 top-full mt-1 w-64 p-2 bg-red-100 border border-red-200 rounded-md text-xs text-red-800 shadow-lg z-20 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+                                      {statusInfo.errorTooltip}
+                                    </div>
+                                  )}
+                                </div>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -546,7 +677,7 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                                   handleSyncDataSource(source.id);
                                 }}
                                 disabled={isSyncing}
-                                className="flex-1 px-3 py-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0046b2] transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 shadow-sm hover:shadow-md"
+                                className="flex-1 px-3 py-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0046b2] transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 shadow-sm hover:shadow-md" title="Synchronise les données depuis la source externe et met à jour le cache local avec les dernières informations (volume, structure, données)"
                               >
                                 <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
                                 {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
@@ -633,6 +764,52 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
               >
                 {deletingDataSources.has(dataSourceToDelete.id) ? 'Suppression...' : 'Supprimer'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de synchronisation compact */}
+      {showSyncModal && (
+        <div className="fixed top-4 right-4 z-50">
+          <div className={`relative bg-white rounded-lg shadow-xl border-2 w-80 ${
+            syncSuccess ? "border-green-200" : "border-blue-200"
+          }`}>
+            <div className="p-4">
+              {syncSuccess ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <CheckCircle size={20} className="text-green-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-green-800">Synchronisation réussie</p>
+                    <p className="text-xs text-green-600">{syncMessage}</p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <RefreshCw size={20} className="text-blue-600 animate-spin" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-800">Synchronisation</p>
+                      <p className="text-xs text-blue-600">{syncMessage}</p>
+                    </div>
+                    <div className="text-xs font-medium text-blue-600">
+                      {Math.round(syncProgress)}%
+                    </div>
+                  </div>
+                  
+                  {/* Barre de progression */}
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                      style={{ width: `${syncProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

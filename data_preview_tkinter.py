@@ -41,7 +41,14 @@ class DataPreviewTkinter:
         """Configure l'interface utilisateur tkinter"""
         print("🔧 Création de la fenêtre tkinter...")
         
-        self.root = tk.Tk()
+        try:
+            self.root = tk.Tk()
+            print("✅ Objet Tk() créé avec succès")
+        except Exception as e:
+            print(f"❌ Erreur création Tk(): {e}")
+            print("⚠️ Impossible de créer l'interface graphique. Vérifiez que X11 est configuré et que la variable DISPLAY est correcte.")
+            return
+        
         self.root.title("Prévisualisation des Données")
         self.root.geometry("1200x800")
         self.root.minsize(800, 600)
@@ -59,7 +66,7 @@ class DataPreviewTkinter:
                   background=[('active', '#0056D2'), ('!disabled', '#007BFF')],
                   foreground=[('!disabled', 'white')])
         
-        style.configure('Title.TLabel', font=('Segoe UI', 14, 'bold'), foreground='#0056D2')
+        style.configure('Title.TLabel', font=('Segoe UI', 16, 'bold'), foreground='#0056D2')
         style.configure('Control.TLabel', font=('Segoe UI', 10), foreground='#0056D2')
         
         # Configuration des couleurs pour les lignes alternées uniquement
@@ -305,9 +312,9 @@ class DataPreviewTkinter:
                 if self.auth_token:
                     headers['Authorization'] = f'Bearer {self.auth_token}'
                 
-                # Charger les données
+                # Charger les données - essayer d'abord l'endpoint principal
                 response = requests.get(
-                    f"{self.api_base_url}/data-sources/{self.data_source_id}/data?limit=1000",
+                    f"{self.api_base_url}/api/v1/data-sources/{self.data_source_id}/data?limit=1000",
                     headers=headers,
                     timeout=30
                 )
@@ -319,7 +326,7 @@ class DataPreviewTkinter:
                     
                     # Charger les informations de la source de données
                     ds_response = requests.get(
-                        f"{self.api_base_url}/data-sources/{self.data_source_id}",
+                        f"{self.api_base_url}/api/v1/data-sources/{self.data_source_id}",
                         headers=headers,
                         timeout=30
                     )
@@ -341,6 +348,38 @@ class DataPreviewTkinter:
                     self.root.after(0, self.update_display)
                     self.root.after(0, lambda: self.update_status(f"Données chargées: {len(self.data)} lignes"))
                     
+                elif response.status_code == 401:
+                    # Erreur d'authentification - essayer l'endpoint public
+                    print("🔓 Tentative d'accès à l'endpoint public...")
+                    public_response = requests.get(
+                        f"{self.api_base_url}/api/v1/preview/preview-data/{self.data_source_id}?limit=1000",
+                        timeout=30
+                    )
+                    
+                    if public_response.status_code == 200:
+                        result = public_response.json()
+                        self.data = result.get('rows', [])
+                        self.total_rows = result.get('total_rows', len(self.data))
+                        
+                        # Créer un objet data_source minimal pour le titre
+                        self.data_source = {
+                            'name': result.get('data_source_name', 'Source inconnue'),
+                            'type': result.get('data_source_type', 'inconnu')
+                        }
+                        
+                        # Initialiser les colonnes visibles
+                        if self.data:
+                            self.visible_columns = list(self.data[0].keys())[:10]
+                        
+                        self.root.after(0, self.update_display)
+                        self.root.after(0, lambda: self.update_status(f"Données chargées (mode public): {len(self.data)} lignes"))
+                    else:
+                        print(f"❌ Erreur endpoint public: {public_response.status_code}")
+                        # Les deux endpoints ont échoué
+                        error_msg = "Authentification requise pour accéder aux données."
+                        self.root.after(0, lambda: self.update_status("Connectez-vous pour voir les données"))
+                        self.root.after(0, lambda: self.show_auth_required_message())
+                    
                 else:
                     error_msg = f"Erreur HTTP {response.status_code}"
                     self.root.after(0, lambda: self.update_status(error_msg))
@@ -355,8 +394,27 @@ class DataPreviewTkinter:
         threading.Thread(target=load_thread, daemon=True).start()
     
     def refresh_data(self):
-        """Actualise les données"""
-        self.load_data()
+        """Actualise les données depuis l'API"""
+        if self.data_source_id:
+            print("🔄 Actualisation des données...")
+            self.load_data()
+        else:
+            messagebox.showwarning("Attention", "Aucune source de données configurée")
+    
+    def show_auth_required_message(self):
+        """Affiche un message quand l'authentification est requise"""
+        # Afficher un message dans le tableau
+        self.tree['columns'] = ('Message',)
+        self.tree.heading('Message', text='Message')
+        self.tree.insert('', tk.END, values=('Accès limité - Connectez-vous pour voir toutes les données',))
+        
+        # Afficher un message popup informatif
+        messagebox.showinfo(
+            "Mode Accès Limité",
+            "L'application fonctionne en mode accès public.\n\n"
+            "Certaines fonctionnalités peuvent être limitées.\n\n"
+            "Pour un accès complet, connectez-vous dans l'application web et relancez la prévisualisation."
+        )
     
     def export_csv(self):
         """Exporte les données affichées vers un fichier CSV"""
@@ -498,22 +556,28 @@ class DataPreviewTkinter:
     def run(self):
         """Lance l'interface"""
         print("🚀 Lancement de l'interface tkinter...")
+        print(f"📊 Data source ID: {self.data_source_id}")
+        print(f"🌐 API URL: {self.api_base_url}")
         print("🎯 Démarrage de la boucle principale...")
         
-        # Empêcher la fermeture automatique
-        self.root.after(100, lambda: print("✅ Interface initialisée et prête"))
-        
         try:
-            # Garder la fenêtre ouverte au moins 2 secondes pour éviter la fermeture automatique
-            self.root.after(2000, self.keep_window_open)
+            # Afficher un message après 1 seconde
+            self.root.after(1000, lambda: print("✅ Interface initialisée - 1s écoulée"))
+            
+            print("🔄 Entrée dans mainloop...")
+            print("✅ Interface lancée - rester ouverte indéfiniment")
             self.root.mainloop()
             print("✅ Interface fermée proprement")
+            
         except Exception as e:
             print(f"❌ Erreur dans mainloop: {e}")
+            import traceback
+            traceback.print_exc()
     
     def keep_window_open(self):
         """Empêche la fermeture automatique de la fenêtre"""
         print("✅ Fenêtre stabilisée et prête pour interaction")
+        print("🎯 L'interface devrait maintenant être visible")
 
 
 def main():
