@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Database, Cloud, Server, HardDrive, Plus, RefreshCw, AlertCircle, CheckCircle, Eye, X, Trash2 } from 'lucide-react';
+import { Database, Cloud, Server, HardDrive, Plus, RefreshCw, AlertCircle, CheckCircle, Eye, X, Trash2, BarChart3, TrendingUp, PieChart, Activity } from 'lucide-react';
 import { TopMenuBar } from './TopMenuBar';
 import { Sidebar } from './Sidebar';
 import { getDataSources, syncDataSource, type DataSource, type DataSourceCreate } from '../api/service';
@@ -33,7 +33,10 @@ const getStatusFromDataSource = (dataSource: DataSource) => {
   const updatedAt = dataSource.updated_at ? new Date(dataSource.updated_at) : null;
   const hoursDiff = updatedAt ? (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60) : null;
   
-  if (!dataSource.is_active) return { status: 'En pause', isError: false, errorTooltip: null };
+  // If source is not active, mark as paused
+  if (!dataSource.is_active) {
+    return { status: 'En pause', isError: false, errorTooltip: null };
+  }
   
   // Only mark as error if very old (7+ days) AND no recent activity
   if (hoursDiff && hoursDiff > 168) { // 7 days
@@ -44,6 +47,7 @@ const getStatusFromDataSource = (dataSource: DataSource) => {
     };
   }
   
+  // Default to active/connected
   return { status: 'Connecté', isError: false, errorTooltip: null };
 };
 
@@ -150,6 +154,7 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
   const [syncSuccess, setSyncSuccess] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
   const [syncProgress, setSyncProgress] = useState(0);
+
   const { token: authToken } = useAuth();
 
   const handleShowImportModal = useCallback(() => {
@@ -162,14 +167,14 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
 
   const handleViewData = async (dataSource: DataSource) => {
     try {
-      console.log(`Lancement de l'interface tkinter pour la source: ${dataSource.name}`);
-      
+      console.log(`Récupération des données de prévisualisation pour: ${dataSource.name}`);
+
       // Essayer d'abord avec l'endpoint authentifié
       let response;
       try {
         console.log('Tentative avec endpoint authentifié...');
         console.log('Auth token présent:', !!authToken);
-        
+
         response = await fetch(`${API_BASE_URL}/preview/launch-preview/${dataSource.id}`, {
           method: 'POST',
           headers: {
@@ -180,7 +185,7 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
         });
 
         console.log('Réponse authentifiée:', response.status, response.statusText);
-        
+
         if (response.ok) {
           const result = await response.json();
           console.log('Interface tkinter lancée avec succès:', result);
@@ -205,67 +210,29 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
         });
 
         console.log('Réponse de test:', response.status, response.statusText);
-        
+
         if (response.ok) {
           const result = await response.json();
           console.log('Test de lancement réussi:', result);
           alert(`Interface de prévisualisation lancée avec succès. PID: ${result.process_id}`);
         } else {
-          console.error('Échec du test de lancement:', response.status, response.statusText);
-          throw new Error(`Échec du test de lancement: ${response.status} ${response.statusText}`);
+          console.error('Échec du test de récupération:', response.status, response.statusText);
+          throw new Error(`Échec du test de récupération: ${response.status} ${response.statusText}`);
         }
       } catch (testError) {
-        console.error('Erreur lors du test de lancement:', testError);
+        console.error('Erreur lors du test de récupération:', testError);
         throw testError;
       }
-      
+
     } catch (error) {
-     console.error('Erreur lors du lancement de l\'interface tkinter:', error);
-    
+     console.error('Erreur lors de la récupération des données de prévisualisation:', error);
+
      // Proposer une solution alternative
      const errorMessage = error instanceof Error ? error.message : String(error);
-     const useDemo = confirm(
-       `Erreur lors du lancement de l'interface de prévisualisation: ${errorMessage}\n\n` +
-       'Cela peut être dû à un problème de configuration X11 ou à l\'absence de la variable DISPLAY.\n\n' +
-       'Souhaitez-vous lancer la démonstration avec des données fictives ?'
+     alert(
+       `Erreur lors de la récupération des données de prévisualisation: ${errorMessage}\n\n` +
+       'Vérifiez que le backend est en cours d\'exécution.'
      );
-      
-      if (useDemo) {
-        try {
-          // Lancer directement le script de démonstration
-          const demoResponse = await fetch('/api/demo-launch', {
-            method: 'POST'
-          });
-          if (demoResponse.ok) {
-            alert('Démonstration lancée avec succès !');
-          } else {
-            // Fallback: suggérer de lancer manuellement
-            alert(
-              'Pour tester l\'interface tkinter, exécutez cette commande dans un terminal :\n\n' +
-              'python test_tkinter_demo.py\n\n' +
-              'Cela ouvrira une fenêtre de démonstration avec des données fictives.'
-            );
-          }
-        } catch (demoError) {
-          console.error('Erreur de démonstration:', demoError);
-          alert(
-            'Pour tester l\'interface tkinter, exécutez cette commande dans un terminal :\n\n' +
-            'python test_tkinter_demo.py\n\n' +
-            'Cela ouvrira une fenêtre de démonstration avec des données fictives.'
-          );
-        }
-      } else {
-       // Si l'utilisateur ne veut pas la démonstration, donner des instructions claires
-       alert(
-         'Pour résoudre ce problème:\n\n' +
-         '1. Vérifiez que vous êtes connecté\n' +
-         '2. Assurez-vous que le backend est en cours d\'exécution\n' +
-         '3. Vérifiez que X11 est configuré et que la variable DISPLAY est correcte\n' +
-         '4. Si vous utilisez Docker, assurez-vous que X11 forwarding est activé\n\n' +
-         'Vous pouvez également essayer de lancer manuellement avec:\n' +
-         'python test_tkinter_demo.py'
-       );
-     }
     }
   };
 
@@ -408,6 +375,79 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
     setDataSourceToDelete(null);
   };
 
+  const handleShowStatisticsTkinter = async (dataSource: DataSource) => {
+    try {
+      console.log(`Récupération des statistiques pour: ${dataSource.name}`);
+
+      // Essayer d'abord avec l'endpoint authentifié
+      let response;
+      try {
+        console.log('Tentative avec endpoint authentifié pour les statistiques...');
+        console.log('Auth token présent:', !!authToken);
+
+        response = await fetch(`${API_BASE_URL}/preview/launch-statistics/${dataSource.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+          },
+          credentials: 'include'
+        });
+
+        console.log('Réponse authentifiée statistiques:', response.status, response.statusText);
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Interface tkinter des statistiques lancée avec succès:', result);
+          alert(`Interface de statistiques lancée avec succès. PID: ${result.process_id}`);
+          return;
+        } else if (response.status === 401) {
+          console.log('Non autorisé pour les statistiques - passage à l\'endpoint de test');
+          throw new Error('Non autorisé');
+        }
+      } catch (authError) {
+        console.log('Erreur d\'authentification pour les statistiques, tentative avec l\'endpoint de test...:', authError);
+      }
+
+      // Si l'endpoint authentifié échoue, essayer l'endpoint de test
+      console.log('Tentative avec l\'endpoint de test pour les statistiques...');
+      try {
+        response = await fetch(`${API_BASE_URL}/preview/test-launch-statistics/${dataSource.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        console.log('Réponse de test statistiques:', response.status, response.statusText);
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Test de lancement des statistiques réussi:', result);
+          alert(`Interface de statistiques lancée avec succès. PID: ${result.process_id}`);
+        } else {
+          console.error('Échec du test de récupération des statistiques:', response.status, response.statusText);
+          throw new Error(`Échec du test de récupération des statistiques: ${response.status} ${response.statusText}`);
+        }
+      } catch (testError) {
+        console.error('Erreur lors du test de récupération des statistiques:', testError);
+        throw testError;
+      }
+
+    } catch (error) {
+     console.error('Erreur lors de la récupération des statistiques:', error);
+
+     // Proposer une solution alternative
+     const errorMessage = error instanceof Error ? error.message : String(error);
+     alert(
+       `Erreur lors de la récupération des statistiques: ${errorMessage}\n\n` +
+       'Vérifiez que le backend est en cours d\'exécution.'
+     );
+    }
+  };
+
+
+
   useEffect(() => {
     loadDataSources();
   }, [authToken]);
@@ -461,6 +501,15 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
       : new Date();
 
     const timeAgo = getLastSyncFromDate(mostRecentSync.toISOString());
+
+    console.log('📊 Statistics calculated:', {
+      totalSources: dataSources.length,
+      active: activeSources.length,
+      errors: errorSources.length,
+      paused: pausedSources.length,
+      totalVolume,
+      timeAgo
+    });
 
     return {
       activeSources,
@@ -671,17 +720,33 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
                             </div>
 
                             <div className="flex gap-2 mt-auto">
+                              {/* Bouton Sync - Icône uniquement */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleSyncDataSource(source.id);
                                 }}
                                 disabled={isSyncing}
-                                className="flex-1 px-3 py-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0046b2] transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 shadow-sm hover:shadow-md" title="Synchronise les données depuis la source externe et met à jour le cache local avec les dernières informations (volume, structure, données)"
+                                className="p-2 bg-[#0056D2] text-white rounded-lg hover:bg-[#0046b2] transition-all duration-200 flex items-center justify-center disabled:opacity-50 shadow-sm hover:shadow-md" 
+                                title="Synchroniser"
                               >
-                                <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} />
-                                {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
+                                <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
                               </button>
+                              
+                              {/* Bouton Statistiques - Icône verte */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleShowStatisticsTkinter(source);
+                                }}
+                                className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200 text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+                                title="Statistiques"
+                              >
+                                <BarChart3 size={14} style={{ color: 'black' }} />
+                                Stats
+                              </button>
+                              
+                              {/* Bouton Voir - Texte + Icône */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -814,6 +879,8 @@ export function DataSourcesView({ currentView, onViewChange, onShowImportModal }
           </div>
         </div>
       )}
+
+
     </div>
   );
 }

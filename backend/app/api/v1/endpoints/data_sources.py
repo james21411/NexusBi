@@ -1,11 +1,13 @@
-from typing import Any, List
+from typing import Any, List, Dict, Optional
 from datetime import datetime
 import json
 import re
 import pandas as pd
 import io
+import numpy as np
+from collections import Counter
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 
 from app import models, schemas
@@ -535,19 +537,53 @@ async def upload_data_source(
                 # Don't fail - just log the issue
 
         elif file_extension in ['.xlsx', '.xls']:
-            df = pd.read_excel(io.BytesIO(content))
-            processing_info = {
-                "detected_encoding": "utf-8",
-                "detected_delimiter": None,
-                "processing_method": "pandas_excel"
-            }
+            try:
+                df = pd.read_excel(io.BytesIO(content))
+                processing_info = {
+                    "detected_encoding": "utf-8",
+                    "detected_delimiter": None,
+                    "processing_method": "pandas_excel",
+                    "sheet_names": getattr(df, 'sheet_names', None) if hasattr(pd, 'ExcelFile') else None
+                }
+                print(f"✅ Excel file processed successfully - Shape: {df.shape}")
+            except Exception as e:
+                print(f"❌ Excel file processing failed: {e}")
+                raise HTTPException(status_code=400, detail=f"Unable to process Excel file: {str(e)}")
+                
         elif file_extension == '.json':
-            df = pd.read_json(io.BytesIO(content))
-            processing_info = {
-                "detected_encoding": "utf-8",
-                "detected_delimiter": None,
-                "processing_method": "pandas_json"
-            }
+            try:
+                df = pd.read_json(io.BytesIO(content))
+                processing_info = {
+                    "detected_encoding": "utf-8",
+                    "detected_delimiter": None,
+                    "processing_method": "pandas_json",
+                    "json_structure": "flat" if len(df.shape) == 2 else "nested"
+                }
+                print(f"✅ JSON file processed successfully - Shape: {df.shape}")
+            except Exception as e:
+                print(f"❌ JSON file processing failed: {e}")
+                # Essayer une approche alternative pour JSON
+                try:
+                    # Lire comme JSON normal et convertir en DataFrame
+                    json_data = json.loads(content.decode('utf-8'))
+                    if isinstance(json_data, list):
+                        df = pd.DataFrame(json_data)
+                    elif isinstance(json_data, dict):
+                        # Si c'est un objet, essayer de l'aplatir
+                        df = pd.json_normalize(json_data)
+                    else:
+                        raise ValueError("Unsupported JSON structure")
+                    
+                    processing_info = {
+                        "detected_encoding": "utf-8",
+                        "detected_delimiter": None,
+                        "processing_method": "pandas_json_fallback",
+                        "json_structure": "converted_from_object"
+                    }
+                    print(f"✅ JSON file processed with fallback - Shape: {df.shape}")
+                except Exception as fallback_error:
+                    print(f"❌ JSON fallback also failed: {fallback_error}")
+                    raise HTTPException(status_code=400, detail=f"Unable to process JSON file: {str(fallback_error)}")
         elif file_extension == '.txt':
             # Try different encodings for TXT files
             encodings_to_try = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
@@ -793,6 +829,22 @@ async def upload_data_source(
                 "column_count": len(df.columns),
                 "processing_info": processing_info
             }
+            
+            # Add specific info for Excel files
+            if file_extension in ['.xlsx', '.xls']:
+                schema_info["file_type_specific"] = {
+                    "format": file_extension[1:],
+                    "sheets_detected": len(df.columns) > 0,  # Basic detection
+                    "data_types_summary": {str(dtype): int((df.dtypes == dtype).sum()) for dtype in df.dtypes}
+                }
+            
+            # Add specific info for JSON files  
+            elif file_extension == '.json':
+                schema_info["file_type_specific"] = {
+                    "format": "json",
+                    "structure_type": processing_info.get("json_structure", "unknown"),
+                    "nested_levels": max(len(str(col).split('.')) for col in df.columns) if '.' in str(df.columns).replace(' ', '') else 1
+                }
 
         print(f"📋 Schema info created: {schema_info}")
 
@@ -989,3 +1041,476 @@ def get_data_source_data(
         "skip": skip,
         "limit": limit
     }
+
+
+def calculate_basic_stats(df: pd.DataFrame) -> Dict[str, Any]:
+    """Calcule les statistiques de base pour un DataFrame"""
+    stats = {
+        'total_rows': len(df),
+        'total_columns': len(df.columns),
+        'missing_values': df.isnull().sum().sum(),
+        'duplicates': df.duplicated().sum() if not df.empty else 0,
+        'memory_usage_mb': round(df.memory_usage(deep=True).sum() / 1024 / 1024, 2),
+    }
+
+    # Distribution des types de données
+    type_distribution = {}
+    for dtype in df.dtypes:
+        dtype_name = str(dtype)
+        if 'int' in dtype_name:
+            type_name = 'integer'
+        elif 'float' in dtype_name:
+            type_name = 'float'
+        elif 'object' in dtype_name:
+            type_name = 'text'
+        elif 'datetime' in dtype_name:
+            type_name = 'datetime'
+        else:
+            type_name = dtype_name
+        type_distribution[type_name] = type_distribution.get(type_name, 0) + 1
+
+    stats['type_distribution'] = type_distribution
+
+    return stats
+
+
+def calculate_column_stats(series: pd.Series, column_name: str) -> Dict[str, Any]:
+    """Calcule les statistiques détaillées pour une colonne spécifique"""
+    stats = {
+        'column_name': column_name,
+        'data_type': str(series.dtype),
+        'total_count': len(series),
+        'non_null_count': series.count(),
+        'null_count': series.isnull().sum(),
+        'null_percentage': round((series.isnull().sum() / len(series)) * 100, 2) if len(series) > 0 else 0,
+        'unique_count': series.nunique(),
+        'unique_percentage': round((series.nunique() / len(series)) * 100, 2) if len(series) > 0 else 0,
+    }
+
+    # Statistiques pour les types numériques
+    if pd.api.types.is_numeric_dtype(series):
+        numeric_series = series.dropna()
+        if len(numeric_series) > 0:
+            stats.update({
+                'mean': round(numeric_series.mean(), 4),
+                'median': round(numeric_series.median(), 4),
+                'std': round(numeric_series.std(), 4),
+                'min': round(numeric_series.min(), 4),
+                'max': round(numeric_series.max(), 4),
+                'q25': round(numeric_series.quantile(0.25), 4),
+                'q75': round(numeric_series.quantile(0.75), 4),
+                'range': round(numeric_series.max() - numeric_series.min(), 4),
+                'variance': round(numeric_series.var(), 4),
+                'skewness': round(numeric_series.skew(), 4),
+                'kurtosis': round(numeric_series.kurtosis(), 4),
+            })
+
+            # Détection des outliers (IQR method)
+            q1 = numeric_series.quantile(0.25)
+            q3 = numeric_series.quantile(0.75)
+            iqr = q3 - q1
+            lower_bound = q1 - 1.5 * iqr
+            upper_bound = q3 + 1.5 * iqr
+            outliers = numeric_series[(numeric_series < lower_bound) | (numeric_series > upper_bound)]
+
+            stats.update({
+                'outliers_count': len(outliers),
+                'outliers_percentage': round((len(outliers) / len(numeric_series)) * 100, 2),
+                'lower_bound': round(lower_bound, 4),
+                'upper_bound': round(upper_bound, 4),
+            })
+
+    # Statistiques pour les types texte
+    elif series.dtype == 'object':
+        text_series = series.dropna().astype(str)
+        if len(text_series) > 0:
+            # Longueur des chaînes
+            lengths = text_series.str.len()
+            stats.update({
+                'avg_length': round(lengths.mean(), 2),
+                'min_length': lengths.min(),
+                'max_length': lengths.max(),
+                'median_length': round(lengths.median(), 2),
+            })
+
+            # Valeurs les plus fréquentes
+            value_counts = text_series.value_counts().head(10)
+            stats['top_values'] = value_counts.to_dict()
+            stats['most_frequent'] = value_counts.index[0] if len(value_counts) > 0 else None
+            stats['most_frequent_count'] = value_counts.iloc[0] if len(value_counts) > 0 else 0
+
+            # Patterns communs
+            patterns = []
+            for value in text_series.head(100):  # Analyser seulement les 100 premières valeurs
+                if re.match(r'^[a-zA-Z]+$', value):
+                    patterns.append('letters_only')
+                elif re.match(r'^[0-9]+$', value):
+                    patterns.append('numbers_only')
+                elif re.match(r'^[a-zA-Z0-9]+$', value):
+                    patterns.append('alphanumeric')
+                elif '@' in value:
+                    patterns.append('email_pattern')
+                else:
+                    patterns.append('other')
+
+            pattern_counts = Counter(patterns)
+            stats['common_patterns'] = dict(pattern_counts.most_common())
+
+    # Statistiques pour les dates
+    elif 'datetime' in str(series.dtype):
+        try:
+            datetime_series = pd.to_datetime(series, errors='coerce').dropna()
+            if len(datetime_series) > 0:
+                stats.update({
+                    'earliest_date': datetime_series.min().isoformat(),
+                    'latest_date': datetime_series.max().isoformat(),
+                    'date_range_days': (datetime_series.max() - datetime_series.min()).days,
+                    'days_per_year': datetime_series.dt.year.nunique(),
+                })
+
+                # Distribution par année/mois/jour de semaine
+                year_dist = datetime_series.dt.year.value_counts().to_dict()
+                month_dist = datetime_series.dt.month.value_counts().to_dict()
+                weekday_dist = datetime_series.dt.day_name().value_counts().to_dict()
+
+                stats.update({
+                    'year_distribution': year_dist,
+                    'month_distribution': month_dist,
+                    'weekday_distribution': weekday_dist,
+                })
+        except Exception as e:
+            stats['date_analysis_error'] = str(e)
+
+    return stats
+
+
+def get_dataframe_from_source(source: models.DataSource, db: Session) -> Optional[pd.DataFrame]:
+    """Récupère et charge les données d'une source dans un DataFrame pandas"""
+    try:
+        print(f"Loading data for source {source.id}: {source.type}")
+
+        # D'abord, essayer de récupérer les données depuis la base de données DataFrameData
+        print(f"Checking DataFrameData table for source {source.id}...")
+        dataframe_rows = (
+            db.query(models.DataFrameData)
+            .filter(models.DataFrameData.data_source_id == source.id)
+            .order_by(models.DataFrameData.row_index)
+            .all()
+        )
+
+        if dataframe_rows:
+            print(f"Found {len(dataframe_rows)} rows in DataFrameData table")
+            
+            # Reconstruire le DataFrame à partir des données stockées
+            rows_data = []
+            columns = None
+            
+            for row in dataframe_rows:
+                row_dict = json.loads(row.row_data)
+                rows_data.append(row_dict)
+                
+                # Déterminer les colonnes à partir de la première ligne
+                if columns is None:
+                    columns = list(row_dict.keys())
+            
+            if rows_data and columns:
+                df = pd.DataFrame(rows_data, columns=columns)
+                print(f"Successfully reconstructed DataFrame from database: {len(df)} rows, {len(df.columns)} columns")
+                return df
+            else:
+                print("No valid data found in DataFrameData table")
+        else:
+            print(f"No data found in DataFrameData table for source {source.id}")
+
+        # Fallback: essayer de charger depuis le fichier si les données ne sont pas en base
+        if source.file_path:
+            print(f"Trying to load from file: {source.file_path}")
+            
+            # Vérifier que le fichier existe
+            import os
+            if not os.path.exists(source.file_path):
+                print(f"File not found: {source.file_path}")
+                return None
+
+            # Récupérer le contenu du fichier basé sur le type
+            if source.type == 'csv':
+                # Pour les fichiers CSV, utiliser les informations du schema_info
+                if source.schema_info:
+                    schema = json.loads(source.schema_info)
+                    if 'processing_info' in schema:
+                        encoding = schema['processing_info'].get('detected_encoding', 'utf-8')
+                        delimiter = schema['processing_info'].get('detected_delimiter', ',')
+
+                        print(f"Reading CSV with encoding={encoding}, delimiter='{delimiter}'")
+
+                        # Lire le fichier CSV
+                        df = pd.read_csv(
+                            source.file_path,
+                            encoding=encoding,
+                            delimiter=delimiter,
+                            low_memory=False
+                        )
+                        print(f"Successfully loaded CSV: {len(df)} rows, {len(df.columns)} columns")
+                        return df
+                else:
+                    # Fallback sans schema_info
+                    df = pd.read_csv(source.file_path, low_memory=False)
+                    return df
+
+            elif source.type == 'txt':
+                if source.schema_info:
+                    schema = json.loads(source.schema_info)
+                    if 'processing_info' in schema:
+                        encoding = schema['processing_info'].get('detected_encoding', 'utf-8')
+                        delimiter = schema['processing_info'].get('detected_delimiter', ',')
+
+                        df = pd.read_csv(
+                            source.file_path,
+                            encoding=encoding,
+                            delimiter=delimiter,
+                            low_memory=False
+                        )
+                        return df
+                else:
+                    # Fallback pour fichier txt
+                    df = pd.read_csv(source.file_path, low_memory=False)
+                    return df
+
+            elif source.type == 'sql':
+                # Pour les fichiers SQL, extraire les données des INSERT statements
+                if source.schema_info:
+                    schema = json.loads(source.schema_info)
+                    if 'sample_data' in schema and 'sample_data_row_count' in schema:
+                        # Utiliser les données d'exemple du schema pour les statistiques
+                        sample_columns = [col['name'] for col in schema.get('sample_data_columns', [])]
+                        sample_data = schema.get('sample_data', [])
+
+                        if sample_columns and sample_data:
+                            # Créer un DataFrame avec les données d'exemple
+                            df = pd.DataFrame(sample_data, columns=sample_columns)
+                            return df
+
+            elif source.type in ['xlsx', 'xls']:
+                # Pour les fichiers Excel
+                try:
+                    # Essayer de lire toutes les feuilles d'abord
+                    try:
+                        excel_file = pd.ExcelFile(source.file_path)
+                        sheet_names = excel_file.sheet_names
+                        print(f"Excel file has {len(sheet_names)} sheets: {sheet_names}")
+                        
+                        # Lire la première feuille par défaut
+                        df = pd.read_excel(source.file_path, sheet_name=0)
+                        print(f"Successfully loaded Excel file (sheet 0): {len(df)} rows, {len(df.columns)} columns")
+                    except Exception as sheet_error:
+                        # Si l'approche avec ExcelFile échoue, essayer directement
+                        print(f"Multi-sheet approach failed: {sheet_error}, trying direct read...")
+                        df = pd.read_excel(source.file_path)
+                        print(f"Successfully loaded Excel file (direct): {len(df)} rows, {len(df.columns)} columns")
+                    
+                    return df
+                except Exception as e:
+                    print(f"Failed to load Excel file: {e}")
+                    return None
+
+            elif source.type == 'json':
+                # Pour les fichiers JSON
+                try:
+                    df = pd.read_json(source.file_path)
+                    print(f"Successfully loaded JSON file: {len(df)} rows, {len(df.columns)} columns")
+                    return df
+                except Exception as e:
+                    print(f"Failed to load JSON file: {e}")
+                    return None
+
+        # Si aucune méthode ne fonctionne, retourner None
+        print(f"Unable to load data for source {source.id}: no database data and file loading failed")
+        return None
+
+    except Exception as e:
+        print(f"Error loading data from source {source.id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+@router.get("/{data_source_id}/statistics")
+async def get_source_statistics(
+    data_source_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Récupère les statistiques avancées pour une source de données
+    """
+    try:
+        # Récupérer la source de données
+        source = db.query(models.DataSource).filter(models.DataSource.id == data_source_id).first()
+        if not source:
+            raise HTTPException(status_code=404, detail="Source de données non trouvée")
+
+        # Charger les données dans un DataFrame
+        df = get_dataframe_from_source(source, db)
+
+        if df is None:
+            return {
+                "source_id": data_source_id,
+                "source_name": source.name,
+                "error": "Impossible de charger les données pour cette source",
+                "columns": [],
+                "sample_data": []
+            }
+
+        # Calculer les statistiques de base
+        basic_stats = calculate_basic_stats(df)
+
+        # Préparer les informations sur les colonnes
+        columns_info = []
+        for col_name, col_dtype in df.dtypes.items():
+            columns_info.append({
+                'name': col_name,
+                'type': str(col_dtype),
+                'non_null_count': int(df[col_name].count()),
+                'null_count': int(df[col_name].isnull().sum()),
+                'unique_count': int(df[col_name].nunique())
+            })
+
+        # Préparer un échantillon de données (5 premières lignes)
+        sample_data = []
+        for _, row in df.head(5).iterrows():
+            row_dict = {}
+            for col in df.columns:
+                value = row[col]
+                # Convertir toutes les valeurs numpy/pandas en types Python simples
+                if pd.isna(value):
+                    row_dict[col] = None
+                elif isinstance(value, (np.integer, np.int64, int)):
+                    row_dict[col] = int(value)
+                elif isinstance(value, (np.floating, np.float64, float)):
+                    row_dict[col] = float(value)
+                elif isinstance(value, (np.datetime64, pd.Timestamp)):
+                    row_dict[col] = value.isoformat() if pd.notna(value) else None
+                elif isinstance(value, np.bool_):
+                    row_dict[col] = bool(value)
+                else:
+                    row_dict[col] = str(value)
+            sample_data.append(row_dict)
+
+        # S'assurer que toutes les valeurs dans basic_stats sont JSON-serializable
+        def convert_numpy_types(obj):
+            if isinstance(obj, dict):
+                return {k: convert_numpy_types(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(v) for v in obj]
+            elif isinstance(obj, (np.integer, np.int64, int)):
+                return int(obj)
+            elif isinstance(obj, (np.floating, np.float64, float)):
+                return float(obj)
+            elif isinstance(obj, np.bool_):
+                return bool(obj)
+            elif pd.isna(obj):
+                return None
+            else:
+                return obj
+
+        # Convertir tous les types numpy dans basic_stats
+        basic_stats = convert_numpy_types(basic_stats)
+
+        return {
+            "source_id": data_source_id,
+            "source_name": source.name,
+            "source_type": source.type,
+            **basic_stats,
+            "columns": columns_info,
+            "sample_data": sample_data
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors du calcul des statistiques: {str(e)}")
+
+
+@router.get("/{data_source_id}/statistics/column/{column_name}")
+async def get_column_statistics(
+    data_source_id: int,
+    column_name: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Récupère les statistiques détaillées pour une colonne spécifique
+    """
+    try:
+        # Récupérer la source de données
+        source = db.query(models.DataSource).filter(models.DataSource.id == data_source_id).first()
+        if not source:
+            raise HTTPException(status_code=404, detail="Source de données non trouvée")
+
+        # Charger les données dans un DataFrame
+        df = get_dataframe_from_source(source, db)
+
+        if df is None:
+            # Essayer une approche alternative: construire le DataFrame directement depuis DataFrameData
+            print(f"Trying alternative approach for source {data_source_id}...")
+            dataframe_rows = (
+                db.query(models.DataFrameData)
+                .filter(models.DataFrameData.data_source_id == data_source_id)
+                .order_by(models.DataFrameData.row_index)
+                .all()
+            )
+            
+            if dataframe_rows:
+                rows_data = []
+                columns = None
+                
+                for row in dataframe_rows:
+                    row_dict = json.loads(row.row_data)
+                    rows_data.append(row_dict)
+                    
+                    if columns is None:
+                        columns = list(row_dict.keys())
+                
+                if rows_data and columns:
+                    df = pd.DataFrame(rows_data, columns=columns)
+                    print(f"Successfully loaded DataFrame via alternative method: {len(df)} rows, {len(df.columns)} columns")
+                else:
+                    raise HTTPException(status_code=404, detail="Impossible de charger les données pour cette source")
+            else:
+                raise HTTPException(status_code=404, detail="Impossible de charger les données pour cette source")
+
+        # Vérifier que la colonne existe
+        if column_name not in df.columns:
+            raise HTTPException(status_code=404, detail=f"Colonne '{column_name}' non trouvée")
+
+        # Calculer les statistiques pour la colonne spécifique
+        column_stats = calculate_column_stats(df[column_name], column_name)
+
+        # S'assurer que toutes les valeurs dans column_stats sont JSON-serializable
+        def convert_numpy_types(obj):
+            if isinstance(obj, dict):
+                return {k: convert_numpy_types(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(v) for v in obj]
+            elif isinstance(obj, (np.integer, np.int64, int)):
+                return int(obj)
+            elif isinstance(obj, (np.floating, np.float64, float)):
+                return float(obj)
+            elif isinstance(obj, np.bool_):
+                return bool(obj)
+            elif pd.isna(obj):
+                return None
+            else:
+                return obj
+
+        # Convertir tous les types numpy dans column_stats
+        column_stats = convert_numpy_types(column_stats)
+
+        return {
+            "source_id": data_source_id,
+            "column_name": column_name,
+            "statistics": column_stats
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors du calcul des statistiques de colonne: {str(e)}")
